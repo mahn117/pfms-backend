@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: pfms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pfms
+      POSTGRES_PASSWORD: pfms
+      POSTGRES_DB: pfms
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: pfms-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
