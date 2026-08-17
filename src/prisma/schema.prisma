@@ -1,0 +1,221 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  phone         String?   @unique
+  passwordHash  String
+  fullName      String
+  avatarUrl     String?
+  locale        String    @default("vi")
+  role          Role      @default(USER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  refreshTokens        RefreshToken[]
+  passwordResetTokens  PasswordResetToken[]
+  wallets              Wallet[]
+  categories           Category[]
+  transactions         Transaction[]
+  budgets              Budget[]
+  goals                Goal[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+enum OtpChannel {
+  EMAIL
+  SMS
+}
+
+model PasswordResetToken {
+  id         String      @id @default(uuid())
+  userId     String
+  otpHash    String
+  channel    OtpChannel
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime    @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+enum WalletType {
+  CASH
+  BANK
+  CREDIT_CARD
+  E_WALLET
+  OTHER
+}
+
+model Wallet {
+  id              String    @id @default(uuid())
+  userId          String
+  name            String
+  type            WalletType
+  initialBalance  Decimal   @default(0) @db.Decimal(15, 2)
+  currentBalance  Decimal   @default(0) @db.Decimal(15, 2)
+  isArchived      Boolean   @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactionsFrom  Transaction[]  @relation("TransactionFromWallet")
+  transactionsTo    Transaction[]  @relation("TransactionToWallet")
+
+  @@index([userId])
+  @@map("wallets")
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+model Category {
+  id         String    @id @default(uuid())
+  userId     String?
+  parentId   String?
+  name       String
+  type       CategoryType
+  icon       String?
+  isSystem   Boolean   @default(false)
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user    User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Category?  @relation("CategoryToSubcategories", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[]  @relation("CategoryToSubcategories")
+
+  transactions  Transaction[]
+  budgets       Budget[]
+
+  @@index([userId])
+  @@index([parentId])
+  @@map("categories")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  ADJUSTMENT
+}
+
+model Transaction {
+  id             String    @id @default(uuid())
+  userId         String
+  walletId       String
+  toWalletId     String?
+  categoryId     String?
+  goalId         String?
+  type           TransactionType
+  amount         Decimal   @db.Decimal(15, 2)
+  date           DateTime
+  note           String?
+  attachmentUrl  String?
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet    Wallet     @relation("TransactionFromWallet", fields: [walletId], references: [id], onDelete: Restrict)
+  toWallet  Wallet?    @relation("TransactionToWallet", fields: [toWalletId], references: [id], onDelete: Restrict)
+  category  Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  goal      Goal?      @relation(fields: [goalId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([toWalletId])
+  @@index([categoryId])
+  @@index([goalId])
+  @@index([date])
+  @@map("transactions")
+}
+
+enum BudgetPeriodType {
+  MONTH
+  CUSTOM
+}
+
+model Budget {
+  id          String    @id @default(uuid())
+  userId      String
+  categoryId  String?
+  periodType  BudgetPeriodType
+  startDate   DateTime
+  endDate     DateTime
+  limitAmount Decimal   @db.Decimal(15, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([categoryId])
+  @@map("budgets")
+}
+
+enum GoalStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Goal {
+  id             String     @id @default(uuid())
+  userId         String
+  name           String
+  targetAmount   Decimal    @db.Decimal(15, 2)
+  currentAmount  Decimal    @default(0) @db.Decimal(15, 2)
+  deadline       DateTime?
+  status         GoalStatus @default(IN_PROGRESS)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions  Transaction[]
+
+  @@index([userId])
+  @@map("goals")
+}

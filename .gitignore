@@ -23,3 +23,8 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+/src/generated/prisma
+
+
+PROJECT_PLAN.md
+SYSTEM_DESIGN.md
