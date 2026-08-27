@@ -62,14 +62,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     status: HttpStatus,
     exception: HttpException,
   ): string {
-    if (status === HttpStatus.BAD_REQUEST) return ErrorCode.VALIDATION_ERROR;
-    if (status === HttpStatus.UNAUTHORIZED) return ErrorCode.UNAUTHORIZED;
-    if (status === HttpStatus.FORBIDDEN) return ErrorCode.FORBIDDEN;
-    if (status === HttpStatus.NOT_FOUND) return ErrorCode.NOT_FOUND;
     const res = exception.getResponse();
     if (typeof res === 'object' && res !== null && 'errorCode' in res) {
       return (res as Record<string, unknown>).errorCode as string;
     }
+
+    if (status === HttpStatus.BAD_REQUEST) return ErrorCode.VALIDATION_ERROR;
+    if (status === HttpStatus.UNAUTHORIZED) return ErrorCode.UNAUTHORIZED;
+    if (status === HttpStatus.FORBIDDEN) return ErrorCode.FORBIDDEN;
+    if (status === HttpStatus.NOT_FOUND) return ErrorCode.NOT_FOUND;
     return ErrorCode.INTERNAL_SERVER_ERROR;
   }
 
