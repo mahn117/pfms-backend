@@ -123,16 +123,6 @@ export class AuthService {
     }
   }
 
-  private async findMatchingToken(
-    candidates: { id: string; tokenHash: string }[],
-    rawToken: string,
-  ) {
-    for (const candidate of candidates) {
-      if (await bcrypt.compare(rawToken, candidate.tokenHash)) return candidate;
-    }
-    return null;
-  }
-
   private readonly OTP_TTL_SECONDS = 5 * 60;
 
   async forgotPassword(dto: ForgotPasswordDto) {
