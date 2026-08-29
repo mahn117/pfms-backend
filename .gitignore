@@ -28,3 +28,11 @@ Thumbs.db
 
 PROJECT_PLAN.md
 SYSTEM_DESIGN.md
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Compiled output của prisma.config.ts (chỉ cần bản .ts)
+prisma.config.js
+prisma.config.js.map
+prisma.config.d.ts
