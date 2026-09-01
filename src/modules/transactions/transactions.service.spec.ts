@@ -1,0 +1,109 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
+import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
+import { TransactionsService } from './transactions.service';
+import { PrismaService } from '../../prisma/prisma.service';
+
+describe('TransactionsService', () => {
+  let service: TransactionsService;
+  let prisma: DeepMockProxy<PrismaService>;
+
+  beforeEach(async () => {
+    prisma = mockDeep<PrismaService>();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        TransactionsService,
+        { provide: PrismaService, useValue: prisma },
+      ],
+    }).compile();
+
+    service = module.get(TransactionsService);
+    prisma.$transaction.mockImplementation((ops: any) => Promise.all(ops));
+  });
+
+  describe('create', () => {
+    it('EXPENSE nên trừ currentBalance đúng số tiền', async () => {
+      prisma.wallet.findFirst.mockResolvedValue({
+        id: 'wallet-1',
+        userId: 'user-1',
+      } as any);
+      prisma.transaction.create.mockResolvedValue({ id: 'tx-1' } as any);
+      prisma.wallet.update.mockResolvedValue({} as any);
+
+      await service.create('user-1', {
+        type: 'EXPENSE',
+        walletId: 'wallet-1',
+        amount: 50000,
+        date: '2026-08-20',
+      });
+
+      expect(prisma.wallet.update).toHaveBeenCalledWith({
+        where: { id: 'wallet-1' },
+        data: { currentBalance: { increment: -50000 } },
+      });
+    });
+
+    it('INCOME nên cộng currentBalance đúng số tiền', async () => {
+      prisma.wallet.findFirst.mockResolvedValue({
+        id: 'wallet-1',
+        userId: 'user-1',
+      } as any);
+      prisma.transaction.create.mockResolvedValue({ id: 'tx-1' } as any);
+      prisma.wallet.update.mockResolvedValue({} as any);
+
+      await service.create('user-1', {
+        type: 'INCOME',
+        walletId: 'wallet-1',
+        amount: 200000,
+        date: '2026-08-20',
+      });
+
+      expect(prisma.wallet.update).toHaveBeenCalledWith({
+        where: { id: 'wallet-1' },
+        data: { currentBalance: { increment: 200000 } },
+      });
+    });
+
+    it('nên ném NotFoundException nếu ví không thuộc user', async () => {
+      prisma.wallet.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create('user-1', {
+          type: 'EXPENSE' as any,
+          walletId: 'wallet-cua-user-2',
+          amount: 10000,
+          date: '2026-08-20',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('remove', () => {
+    it('nên hoàn tác đúng số dư khi xoá giao dịch EXPENSE', async () => {
+      prisma.transaction.findFirst.mockResolvedValue({
+        id: 'tx-1',
+        userId: 'user-1',
+        walletId: 'wallet-1',
+        type: 'EXPENSE',
+        amount: 30000,
+      } as any);
+      prisma.transaction.update.mockResolvedValue({} as any);
+      prisma.wallet.update.mockResolvedValue({} as any);
+
+      await service.remove('user-1', 'tx-1');
+
+      expect(prisma.wallet.update).toHaveBeenCalledWith({
+        where: { id: 'wallet-1' },
+        data: { currentBalance: { increment: 30000 } },
+      });
+    });
+
+    it('nên ném NotFoundException nếu giao dịch không thuộc user', async () => {
+      prisma.transaction.findFirst.mockResolvedValue(null);
+
+      await expect(service.remove('user-1', 'tx-la')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+});
