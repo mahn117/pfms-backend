@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './redis/redis.module';
 import { UsersModule } from './modules/users/users.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { WalletsModule } from './modules/wallets/wallets.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
     AuthModule,
     UsersModule,
     CategoriesModule,
+    WalletsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
