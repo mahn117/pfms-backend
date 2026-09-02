@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
 import { TransactionsService } from './transactions.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -86,6 +86,62 @@ describe('TransactionsService', () => {
           date: '2026-08-20',
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('createTransfer', () => {
+    it('nên trừ ví nguồn và cộng ví đích đúng số tiền', async () => {
+      prisma.wallet.findFirst
+        .mockResolvedValueOnce({ id: 'wallet-1', userId: 'user-1' } as any)
+        .mockResolvedValueOnce({ id: 'wallet-2', userId: 'user-1' } as any);
+      prisma.transaction.create.mockResolvedValue({ id: 'tx-1' } as any);
+      prisma.wallet.update.mockResolvedValue({} as any);
+
+      await service.createTransfer('user-1', {
+        walletId: 'wallet-1',
+        toWalletId: 'wallet-2',
+        amount: 100000,
+        date: '2026-08-20',
+      });
+
+      expect(prisma.wallet.update).toHaveBeenCalledWith({
+        where: { id: 'wallet-1' },
+        data: { currentBalance: { decrement: 100000 } },
+      });
+      expect(prisma.wallet.update).toHaveBeenCalledWith({
+        where: { id: 'wallet-2' },
+        data: { currentBalance: { increment: 100000 } },
+      });
+    });
+
+    it('nên ném BadRequestException nếu ví nguồn = ví đích', async () => {
+      await expect(
+        service.createTransfer('user-1', {
+          walletId: 'wallet-1',
+          toWalletId: 'wallet-1',
+          amount: 100000,
+          date: '2026-08-20',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('nên rollback (không tạo transaction) nếu 1 bước trong $transaction lỗi', async () => {
+      prisma.wallet.findFirst
+        .mockResolvedValueOnce({ id: 'wallet-1', userId: 'user-1' } as any)
+        .mockResolvedValueOnce({ id: 'wallet-2', userId: 'user-1' } as any);
+      prisma.transaction.create.mockResolvedValue({ id: 'tx-1' } as any);
+      prisma.wallet.update
+        .mockResolvedValueOnce({} as any) // trừ ví nguồn OK
+        .mockRejectedValueOnce(new Error('DB error')); // cộng ví đích lỗi
+
+      await expect(
+        service.createTransfer('user-1', {
+          walletId: 'wallet-1',
+          toWalletId: 'wallet-2',
+          amount: 100000,
+          date: '2026-08-20',
+        }),
+      ).rejects.toThrow('DB error');
     });
   });
 

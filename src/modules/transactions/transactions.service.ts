@@ -8,6 +8,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '../../common/constants/error-codes';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import { CreateTransferDto } from './dto/create-transfer.dto';
+import { FindTransactionsDto } from './dto/find-transactions.dto';
 
 @Injectable()
 export class TransactionsService {
@@ -63,9 +65,7 @@ export class TransactionsService {
     });
 
     if (diff === 0) {
-      return this.prisma
-        .$transaction([updateTransactionQuery])
-        .then(([updated]) => updated);
+      return updateTransactionQuery;
     }
 
     const [updated] = await this.prisma.$transaction([
@@ -81,6 +81,25 @@ export class TransactionsService {
 
   async remove(userId: string, id: string) {
     const existing = await this.findOwnedOrThrow(userId, id);
+
+    if (existing.type === TransactionType.TRANSFER) {
+      await this.prisma.$transaction([
+        this.prisma.transaction.update({
+          where: { id },
+          data: { deletedAt: new Date() },
+        }),
+        this.prisma.wallet.update({
+          where: { id: existing.walletId },
+          data: { currentBalance: { increment: Number(existing.amount) } },
+        }),
+        this.prisma.wallet.update({
+          where: { id: existing.toWalletId! },
+          data: { currentBalance: { decrement: Number(existing.amount) } },
+        }),
+      ]);
+      return { message: 'Xóa giao dịch thành công' };
+    }
+
     const reverseDelta = -this.computeDelta(
       existing.type,
       Number(existing.amount),
@@ -98,6 +117,102 @@ export class TransactionsService {
     ]);
 
     return { message: 'Xóa giao dịch thành công' };
+  }
+
+  async createTransfer(userId: string, dto: CreateTransferDto) {
+    if (dto.walletId === dto.toWalletId) {
+      throw new BadRequestException({
+        errorCode: ErrorCode.SAME_WALLET_TRANSFER,
+        message: 'Ví nguồn và ví đích không được trùng nhau',
+      });
+    }
+
+    const [fromWallet, toWallet] = await Promise.all([
+      this.assertOwnedWallet(userId, dto.walletId),
+      this.assertOwnedWallet(userId, dto.toWalletId),
+    ]);
+
+    const [transaction] = await this.prisma.$transaction([
+      this.prisma.transaction.create({
+        data: {
+          userId,
+          walletId: fromWallet.id,
+          toWalletId: toWallet.id,
+          type: TransactionType.TRANSFER,
+          amount: dto.amount,
+          date: new Date(dto.date),
+          note: dto.note,
+        },
+      }),
+      this.prisma.wallet.update({
+        where: { id: fromWallet.id },
+        data: { currentBalance: { decrement: dto.amount } },
+      }),
+      this.prisma.wallet.update({
+        where: { id: toWallet.id },
+        data: { currentBalance: { increment: dto.amount } },
+      }),
+    ]);
+
+    return transaction;
+  }
+
+  async findAll(userId: string, query: FindTransactionsDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const sortBy = query.sortBy ?? 'date';
+    const sortOrder = query.sortOrder ?? 'desc';
+
+    const hasAmountFilter =
+      query.minAmount !== undefined || query.maxAmount !== undefined;
+    const hasDateFilter = !!query.from || !!query.to;
+
+    const where = {
+      userId,
+      deletedAt: null,
+      ...(query.walletId ? { walletId: query.walletId } : {}),
+      ...(query.categoryId ? { categoryId: query.categoryId } : {}),
+      ...(query.type ? { type: query.type } : {}),
+      ...(hasDateFilter
+        ? {
+            date: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(query.to) } : {}),
+            },
+          }
+        : {}),
+      ...(hasAmountFilter
+        ? {
+            amount: {
+              ...(query.minAmount !== undefined
+                ? { gte: query.minAmount }
+                : {}),
+              ...(query.maxAmount !== undefined
+                ? { lte: query.maxAmount }
+                : {}),
+            },
+          }
+        : {}),
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where,
+        orderBy: { [sortBy]: sortOrder },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.transaction.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async findOne(userId: string, id: string) {
+    return this.findOwnedOrThrow(userId, id);
   }
 
   private computeDelta(type: TransactionType, amount: number): number {

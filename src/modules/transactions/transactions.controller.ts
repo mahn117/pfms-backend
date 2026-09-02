@@ -2,9 +2,11 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -13,6 +15,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import { CreateTransferDto } from './dto/create-transfer.dto';
+import { FindTransactionsDto } from './dto/find-transactions.dto';
 
 @ApiTags('Transactions')
 @ApiBearerAuth()
@@ -27,6 +31,27 @@ export class TransactionsController {
     @Body() dto: CreateTransactionDto,
   ) {
     return this.transactionsService.create(user.userId, dto);
+  }
+
+  @Post('transfer')
+  createTransfer(
+    @CurrentUser() user: { userId: string },
+    @Body() dto: CreateTransferDto,
+  ) {
+    return this.transactionsService.createTransfer(user.userId, dto);
+  }
+
+  @Get()
+  findAll(
+    @CurrentUser() user: { userId: string },
+    @Query() query: FindTransactionsDto,
+  ) {
+    return this.transactionsService.findAll(user.userId, query);
+  }
+
+  @Get(':id')
+  findOne(@CurrentUser() user: { userId: string }, @Param('id') id: string) {
+    return this.transactionsService.findOne(user.userId, id);
   }
 
   @Patch(':id')
