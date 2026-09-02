@@ -27,12 +27,17 @@ describe('TransactionsService', () => {
         id: 'wallet-1',
         userId: 'user-1',
       } as any);
+      prisma.category.findFirst.mockResolvedValue({
+        id: 'category-1',
+        type: 'EXPENSE',
+      } as any);
       prisma.transaction.create.mockResolvedValue({ id: 'tx-1' } as any);
       prisma.wallet.update.mockResolvedValue({} as any);
 
       await service.create('user-1', {
         type: 'EXPENSE',
         walletId: 'wallet-1',
+        categoryId: 'category-1',
         amount: 50000,
         date: '2026-08-20',
       });
@@ -48,12 +53,17 @@ describe('TransactionsService', () => {
         id: 'wallet-1',
         userId: 'user-1',
       } as any);
+      prisma.category.findFirst.mockResolvedValue({
+        id: 'category-1',
+        type: 'INCOME',
+      } as any);
       prisma.transaction.create.mockResolvedValue({ id: 'tx-1' } as any);
       prisma.wallet.update.mockResolvedValue({} as any);
 
       await service.create('user-1', {
         type: 'INCOME',
         walletId: 'wallet-1',
+        categoryId: 'category-1',
         amount: 200000,
         date: '2026-08-20',
       });
@@ -71,6 +81,7 @@ describe('TransactionsService', () => {
         service.create('user-1', {
           type: 'EXPENSE' as any,
           walletId: 'wallet-cua-user-2',
+          categoryId: 'category-1',
           amount: 10000,
           date: '2026-08-20',
         }),

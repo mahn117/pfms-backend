@@ -15,9 +15,7 @@ export class TransactionsService {
 
   async create(userId: string, dto: CreateTransactionDto) {
     const wallet = await this.assertOwnedWallet(userId, dto.walletId);
-    if (dto.categoryId) {
-      await this.assertValidCategory(userId, dto.categoryId, dto.type);
-    }
+    await this.assertValidCategory(userId, dto.categoryId, dto.type);
 
     const delta = this.computeDelta(dto.type, dto.amount);
 
@@ -140,7 +138,7 @@ export class TransactionsService {
     if (category.type !== type) {
       throw new BadRequestException({
         errorCode: ErrorCode.TRANSACTION_CATEGORY_TYPE_MISMATCH,
-        message: 'Danh mục không cùng loại (INCOME/EXPENSE) với giao dịch',
+        message: 'Danh mục không cùng loại với giao dịch',
       });
     }
   }
