@@ -24,10 +24,9 @@ export class CreateTransactionDto {
   @IsUUID('4', { message: 'walletId không hợp lệ' })
   walletId!: string;
 
-  @ApiPropertyOptional({ example: 'uuid-cua-danh-muc' })
-  @IsOptional()
+  @ApiProperty({ example: 'uuid-cua-danh-muc' })
   @IsUUID('4', { message: 'categoryId không hợp lệ' })
-  categoryId?: string;
+  categoryId!: string;
 
   @ApiProperty({ example: 50000 })
   @IsNumber()
