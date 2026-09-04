@@ -67,6 +67,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return (res as Record<string, unknown>).errorCode as string;
     }
 
+    if (status === HttpStatus.PAYLOAD_TOO_LARGE)
+      return ErrorCode.FILE_TOO_LARGE;
     if (status === HttpStatus.BAD_REQUEST) return ErrorCode.VALIDATION_ERROR;
     if (status === HttpStatus.UNAUTHORIZED) return ErrorCode.UNAUTHORIZED;
     if (status === HttpStatus.FORBIDDEN) return ErrorCode.FORBIDDEN;
