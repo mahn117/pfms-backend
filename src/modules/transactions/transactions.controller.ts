@@ -7,17 +7,26 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { ExportTransactionsDto } from './dto/export-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { FindTransactionsDto } from './dto/find-transactions.dto';
-
+import { FileInterceptor } from '@nestjs/platform-express';
+import { attachmentMulterOptions } from './config/upload.config';
+import type { Response } from 'express';
+import { stringify } from 'csv-stringify';
+import { ErrorCode } from '@/common/constants/error-codes';
 @ApiTags('Transactions')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -39,6 +48,75 @@ export class TransactionsController {
     @Body() dto: CreateTransferDto,
   ) {
     return this.transactionsService.createTransfer(user.userId, dto);
+  }
+
+  @Post(':id/attachment')
+  @UseInterceptors(FileInterceptor('file', attachmentMulterOptions))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  uploadAttachment(
+    @CurrentUser() user: { userId: string },
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException({
+        errorCode: ErrorCode.INVALID_FILE_TYPE,
+        message: 'Vui lòng chọn file đính kèm',
+      });
+    }
+
+    return this.transactionsService.addAttachment(
+      user.userId,
+      id,
+      `/uploads/${file.filename}`,
+    );
+  }
+
+  @Get('export')
+  async exportCsv(
+    @CurrentUser() user: { userId: string },
+    @Query() query: ExportTransactionsDto,
+    @Res() res: Response,
+  ) {
+    const transactions = await this.transactionsService.findAllForExport(
+      user.userId,
+      query,
+    );
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="transactions.csv"',
+    );
+
+    res.write('\uFEFF');
+
+    const stringifier = stringify({
+      header: true,
+      columns: ['id', 'type', 'wallet', 'category', 'amount', 'date', 'note'],
+    });
+
+    stringifier.pipe(res);
+    for (const tx of transactions) {
+      stringifier.write({
+        id: tx.id,
+        type: tx.type,
+        wallet: tx.wallet?.name ?? '',
+        category: tx.category?.name ?? '',
+        amount: tx.amount.toString(),
+        date: tx.date.toISOString().slice(0, 10),
+        note: tx.note ?? '',
+      });
+    }
+    stringifier.end();
   }
 
   @Get()

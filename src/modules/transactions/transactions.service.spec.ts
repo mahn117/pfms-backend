@@ -173,4 +173,58 @@ describe('TransactionsService', () => {
       );
     });
   });
+
+  describe('addAttachment', () => {
+    it('nên cập nhật attachmentUrl khi transaction thuộc user', async () => {
+      prisma.transaction.findFirst.mockResolvedValue({
+        id: 'tx-1',
+        userId: 'user-1',
+      } as any);
+      prisma.transaction.update.mockResolvedValue({
+        id: 'tx-1',
+        attachmentUrl: '/uploads/abc.jpg',
+      } as any);
+
+      const result = await service.addAttachment(
+        'user-1',
+        'tx-1',
+        '/uploads/abc.jpg',
+      );
+
+      expect(prisma.transaction.update).toHaveBeenCalledWith({
+        where: { id: 'tx-1' },
+        data: { attachmentUrl: '/uploads/abc.jpg' },
+      });
+      expect(result.attachmentUrl).toBe('/uploads/abc.jpg');
+    });
+
+    it('nên ném NotFoundException nếu transaction không thuộc user', async () => {
+      prisma.transaction.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.addAttachment('user-1', 'tx-la', '/uploads/abc.jpg'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findAllForExport', () => {
+    it('nên gọi findMany với where clause đúng theo filter', async () => {
+      prisma.transaction.findMany.mockResolvedValue([]);
+
+      await service.findAllForExport('user-1', {
+        walletId: 'wallet-1',
+        from: '2026-08-01',
+        to: '2026-08-31',
+      });
+
+      expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'user-1',
+            walletId: 'wallet-1',
+          }),
+        }),
+      );
+    });
+  });
 });

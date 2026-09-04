@@ -10,6 +10,7 @@ import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { FindTransactionsDto } from './dto/find-transactions.dto';
+import { ExportTransactionsDto } from './dto/export-transactions.dto';
 
 @Injectable()
 export class TransactionsService {
@@ -211,6 +212,14 @@ export class TransactionsService {
     };
   }
 
+  async addAttachment(userId: string, id: string, filePath: string) {
+    await this.findOwnedOrThrow(userId, id);
+    return this.prisma.transaction.update({
+      where: { id },
+      data: { attachmentUrl: filePath },
+    });
+  }
+
   async findOne(userId: string, id: string) {
     return this.findOwnedOrThrow(userId, id);
   }
@@ -269,5 +278,50 @@ export class TransactionsService {
       });
     }
     return transaction;
+  }
+
+  async findAllForExport(userId: string, query: ExportTransactionsDto) {
+    return this.prisma.transaction.findMany({
+      where: this.buildWhereClause(userId, query),
+      orderBy: { date: 'desc' },
+      include: { wallet: true, category: true },
+    });
+  }
+
+  private buildWhereClause(
+    userId: string,
+    query: Partial<FindTransactionsDto>,
+  ) {
+    const hasAmountFilter =
+      query.minAmount !== undefined || query.maxAmount !== undefined;
+    const hasDateFilter = !!query.from || !!query.to;
+
+    return {
+      userId,
+      deletedAt: null,
+      ...(query.walletId ? { walletId: query.walletId } : {}),
+      ...(query.categoryId ? { categoryId: query.categoryId } : {}),
+      ...(query.type ? { type: query.type } : {}),
+      ...(hasDateFilter
+        ? {
+            date: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(query.to) } : {}),
+            },
+          }
+        : {}),
+      ...(hasAmountFilter
+        ? {
+            amount: {
+              ...(query.minAmount !== undefined
+                ? { gte: query.minAmount }
+                : {}),
+              ...(query.maxAmount !== undefined
+                ? { lte: query.maxAmount }
+                : {}),
+            },
+          }
+        : {}),
+    };
   }
 }

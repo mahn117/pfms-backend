@@ -36,3 +36,7 @@ SYSTEM_DESIGN.md
 prisma.config.js
 prisma.config.js.map
 prisma.config.d.ts
+
+# Uploads — không commit file người dùng tải lên, chỉ giữ thư mục qua .gitkeep
+uploads/*
+!uploads/.gitkeep
