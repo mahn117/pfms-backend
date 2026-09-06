@@ -1,4 +1,11 @@
-import { PartialType } from '@nestjs/swagger';
+import { PartialType, OmitType } from '@nestjs/swagger';
 import { CreateBudgetDto } from './create-budget.dto';
 
-export class UpdateBudgetDto extends PartialType(CreateBudgetDto) {}
+export class UpdateBudgetDto extends PartialType(
+  OmitType(CreateBudgetDto, [
+    'periodType',
+    'month',
+    'startDate',
+    'endDate',
+  ] as const),
+) {}

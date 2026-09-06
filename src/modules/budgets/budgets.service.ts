@@ -9,13 +9,17 @@ import { CreateBudgetDto } from './dto/create-budget.dto';
 import { UpdateBudgetDto } from './dto/update-budget.dto';
 import { CategoryType } from '@/generated/prisma/client';
 import { TransactionType } from '@/generated/prisma/client';
+import { BudgetPeriodType } from '@/generated/prisma/client';
 
 @Injectable()
 export class BudgetsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateBudgetDto) {
-    this.assertValidPeriod(dto.startDate, dto.endDate);
+    this.assertNoConflictingPeriodFields(dto);
+
+    const { startDate, endDate } = this.resolvePeriodDates(dto);
+    this.assertValidPeriod(startDate, endDate);
 
     if (dto.categoryId) {
       await this.assertValidCategory(userId, dto.categoryId);
@@ -24,8 +28,8 @@ export class BudgetsService {
     await this.assertNoDuplicatePeriod(
       userId,
       dto.categoryId,
-      dto.startDate,
-      dto.endDate,
+      startDate,
+      endDate,
     );
 
     return this.prisma.budget.create({
@@ -33,8 +37,8 @@ export class BudgetsService {
         userId,
         categoryId: dto.categoryId,
         periodType: dto.periodType,
-        startDate: new Date(dto.startDate),
-        endDate: new Date(dto.endDate),
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
         limitAmount: dto.limitAmount,
       },
     });
@@ -54,10 +58,6 @@ export class BudgetsService {
   async update(userId: string, id: string, dto: UpdateBudgetDto) {
     const existing = await this.findOwnedOrThrow(userId, id);
 
-    const startDate = dto.startDate ?? existing.startDate.toISOString();
-    const endDate = dto.endDate ?? existing.endDate.toISOString();
-    this.assertValidPeriod(startDate, endDate);
-
     const finalCategoryId =
       dto.categoryId !== undefined ? dto.categoryId : existing.categoryId;
 
@@ -68,8 +68,8 @@ export class BudgetsService {
     await this.assertNoDuplicatePeriod(
       userId,
       finalCategoryId,
-      startDate,
-      endDate,
+      existing.startDate.toISOString(),
+      existing.endDate.toISOString(),
       id,
     );
 
@@ -77,9 +77,6 @@ export class BudgetsService {
       where: { id },
       data: {
         categoryId: dto.categoryId,
-        periodType: dto.periodType,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         limitAmount: dto.limitAmount,
       },
     });
@@ -221,6 +218,24 @@ export class BudgetsService {
     }
   }
 
+  private assertNoConflictingPeriodFields(dto: CreateBudgetDto) {
+    if (dto.periodType === BudgetPeriodType.MONTH) {
+      if (dto.startDate || dto.endDate) {
+        throw new BadRequestException({
+          errorCode: ErrorCode.VALIDATION_ERROR,
+          message: 'Không được gửi startDate/endDate khi periodType = MONTH',
+        });
+      }
+    } else if (dto.periodType === BudgetPeriodType.CUSTOM) {
+      if (dto.month) {
+        throw new BadRequestException({
+          errorCode: ErrorCode.VALIDATION_ERROR,
+          message: 'Không được gửi month khi periodType = CUSTOM',
+        });
+      }
+    }
+  }
+
   private async findOwnedOrThrow(userId: string, id: string) {
     const budget = await this.prisma.budget.findFirst({
       where: { id, userId },
@@ -258,6 +273,32 @@ export class BudgetsService {
         message: 'Ngân sách chỉ áp dụng cho danh mục loại EXPENSE (chi tiêu)',
       });
     }
+  }
+
+  private resolvePeriodDates(dto: {
+    periodType: BudgetPeriodType;
+    month?: string;
+    startDate?: string;
+    endDate?: string;
+  }): { startDate: string; endDate: string } {
+    if (dto.periodType === BudgetPeriodType.MONTH) {
+      const [yearStr, monthStr] = dto.month!.split('-');
+      const year = Number(yearStr);
+      const monthIndex = Number(monthStr) - 1;
+
+      const start = new Date(Date.UTC(year, monthIndex, 1));
+      const end = new Date(Date.UTC(year, monthIndex + 1, 0));
+
+      return {
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+      };
+    }
+
+    return {
+      startDate: dto.startDate!,
+      endDate: dto.endDate!,
+    };
   }
 
   private assertValidPeriod(startDate: string, endDate: string) {

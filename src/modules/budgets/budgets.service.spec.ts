@@ -19,17 +19,79 @@ describe('BudgetsService', () => {
   });
 
   describe('create', () => {
-    it('nên ném BadRequestException nếu startDate >= endDate', async () => {
-      await expect(
-        service.create('user-1', {
-          periodType: 'MONTH' as any,
-          startDate: '2026-08-31',
-          endDate: '2026-08-01',
-          limitAmount: 1000000,
-        }),
-      ).rejects.toThrow(BadRequestException);
+    it('nên tự tính startDate/endDate là đầu/cuối tháng khi periodType = MONTH', async () => {
+      prisma.category.findFirst.mockResolvedValue({
+        id: 'cat-1',
+        type: 'EXPENSE',
+      } as any);
+      prisma.budget.findFirst.mockResolvedValue(null);
+      prisma.budget.create.mockResolvedValue({ id: 'budget-1' } as any);
 
-      expect(prisma.budget.create).not.toHaveBeenCalled();
+      await service.create('user-1', {
+        categoryId: 'cat-1',
+        periodType: 'MONTH',
+        month: '2026-08',
+        limitAmount: 1000000,
+      });
+
+      expect(prisma.budget.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            startDate: new Date(Date.UTC(2026, 7, 1)),
+            endDate: new Date(Date.UTC(2026, 7, 31)),
+          }),
+        }),
+      );
+    });
+
+    it('nên tự tính đúng ngày cuối tháng 2 năm nhuận (2028)', async () => {
+      prisma.category.findFirst.mockResolvedValue({
+        id: 'cat-1',
+        type: 'EXPENSE',
+      } as any);
+      prisma.budget.findFirst.mockResolvedValue(null);
+      prisma.budget.create.mockResolvedValue({ id: 'budget-1' } as any);
+
+      await service.create('user-1', {
+        categoryId: 'cat-1',
+        periodType: 'MONTH',
+        month: '2028-02',
+        limitAmount: 1000000,
+      });
+
+      expect(prisma.budget.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            endDate: new Date(Date.UTC(2028, 1, 29)), // năm nhuận: tháng 2 có 29 ngày
+          }),
+        }),
+      );
+    });
+
+    it('nên dùng đúng startDate/endDate người nhập khi periodType = CUSTOM', async () => {
+      prisma.category.findFirst.mockResolvedValue({
+        id: 'cat-1',
+        type: 'EXPENSE',
+      } as any);
+      prisma.budget.findFirst.mockResolvedValue(null);
+      prisma.budget.create.mockResolvedValue({ id: 'budget-1' } as any);
+
+      await service.create('user-1', {
+        categoryId: 'cat-1',
+        periodType: 'CUSTOM',
+        startDate: '2026-08-15',
+        endDate: '2026-08-30',
+        limitAmount: 1000000,
+      });
+
+      expect(prisma.budget.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            startDate: new Date('2026-08-15'),
+            endDate: new Date('2026-08-30'),
+          }),
+        }),
+      );
     });
 
     it('nên ném BadRequestException nếu category không phải EXPENSE', async () => {
@@ -41,11 +103,11 @@ describe('BudgetsService', () => {
       await expect(
         service.create('user-1', {
           categoryId: 'cat-1',
-          periodType: 'MONTH' as any,
+          periodType: 'CUSTOM' as any,
           startDate: '2026-08-01',
           endDate: '2026-08-31',
           limitAmount: 1000000,
-        }),
+        } as any),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -54,18 +116,46 @@ describe('BudgetsService', () => {
         id: 'cat-1',
         type: 'EXPENSE',
       } as any);
-      prisma.budget.findFirst.mockResolvedValue({
-        id: 'budget-cu',
-      } as any);
+      prisma.budget.findFirst.mockResolvedValue({ id: 'budget-cu' } as any);
 
       await expect(
         service.create('user-1', {
           categoryId: 'cat-1',
-          periodType: 'MONTH' as any,
+          periodType: 'CUSTOM' as any,
           startDate: '2026-08-01',
           endDate: '2026-08-31',
           limitAmount: 1000000,
-        }),
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.budget.create).not.toHaveBeenCalled();
+    });
+
+    it('nên ném BadRequestException nếu gửi startDate/endDate khi periodType = MONTH', async () => {
+      await expect(
+        service.create('user-1', {
+          categoryId: 'cat-1',
+          periodType: 'MONTH' as any,
+          month: '2026-08',
+          startDate: '2025-03-01',
+          endDate: '2025-03-31',
+          limitAmount: 1000000,
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.budget.create).not.toHaveBeenCalled();
+    });
+
+    it('nên ném BadRequestException nếu gửi month khi periodType = CUSTOM', async () => {
+      await expect(
+        service.create('user-1', {
+          categoryId: 'cat-1',
+          periodType: 'CUSTOM' as any,
+          month: '2026-08',
+          startDate: '2025-03-01',
+          endDate: '2025-03-31',
+          limitAmount: 1000000,
+        } as any),
       ).rejects.toThrow(BadRequestException);
 
       expect(prisma.budget.create).not.toHaveBeenCalled();
@@ -82,51 +172,21 @@ describe('BudgetsService', () => {
       await expect(
         service.create('user-1', {
           categoryId: 'cat-1',
-          periodType: 'MONTH' as any,
+          periodType: 'CUSTOM' as any,
           startDate: '2026-08-15',
           endDate: '2026-08-30',
           limitAmount: 500000,
-        }),
+        } as any),
       ).resolves.toBeDefined();
-
-      expect(prisma.budget.create).toHaveBeenCalled();
-    });
-
-    it('nên tạo budget thành công với dữ liệu hợp lệ', async () => {
-      prisma.category.findFirst.mockResolvedValue({
-        id: 'cat-1',
-        type: 'EXPENSE',
-      } as any);
-      prisma.budget.findFirst.mockResolvedValue(null);
-      prisma.budget.create.mockResolvedValue({ id: 'budget-1' } as any);
-
-      await service.create('user-1', {
-        categoryId: 'cat-1',
-        periodType: 'MONTH',
-        startDate: '2026-08-01',
-        endDate: '2026-08-31',
-        limitAmount: 1000000,
-      });
-
-      expect(prisma.budget.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            userId: 'user-1',
-            categoryId: 'cat-1',
-            limitAmount: 1000000,
-          }),
-        }),
-      );
     });
   });
 
   describe('update', () => {
-    it('nên cập nhật thành công khi không có trùng lặp', async () => {
+    it('nên cập nhật categoryId/limitAmount thành công, không đổi ngày', async () => {
       prisma.category.findFirst.mockResolvedValue({
-        id: 'cat-1',
+        id: 'cat-2',
         type: 'EXPENSE',
       } as any);
-
       prisma.budget.findFirst
         .mockResolvedValueOnce({
           id: 'budget-1',
@@ -137,20 +197,24 @@ describe('BudgetsService', () => {
           limitAmount: 1000000,
         } as any)
         .mockResolvedValueOnce(null);
-
       prisma.budget.update.mockResolvedValue({ id: 'budget-1' } as any);
 
-      await service.update('user-1', 'budget-1', { limitAmount: 1500000 });
+      await service.update('user-1', 'budget-1', {
+        categoryId: 'cat-2',
+        limitAmount: 1500000,
+      });
 
-      expect(prisma.budget.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'budget-1' },
-          data: expect.objectContaining({ limitAmount: 1500000 }),
-        }),
-      );
+      expect(prisma.budget.update).toHaveBeenCalledWith({
+        where: { id: 'budget-1' },
+        data: { categoryId: 'cat-2', limitAmount: 1500000 },
+      });
     });
 
-    it('nên ném BadRequestException nếu update trùng với budget khác (không phải chính nó)', async () => {
+    it('nên ném BadRequestException nếu category mới trùng lịch với budget khác', async () => {
+      prisma.category.findFirst.mockResolvedValue({
+        id: 'cat-2',
+        type: 'EXPENSE',
+      } as any);
       prisma.budget.findFirst
         .mockResolvedValueOnce({
           id: 'budget-1',
@@ -159,14 +223,11 @@ describe('BudgetsService', () => {
           startDate: new Date('2026-08-01'),
           endDate: new Date('2026-08-31'),
           limitAmount: 1000000,
-        } as any) // findOwnedOrThrow
-        .mockResolvedValueOnce({ id: 'budget-2' } as any); // assertNoDuplicatePeriod tìm thấy bản ghi khác trùng
+        } as any)
+        .mockResolvedValueOnce({ id: 'budget-khac' } as any);
 
       await expect(
-        service.update('user-1', 'budget-1', {
-          startDate: '2026-09-01',
-          endDate: '2026-09-30',
-        }),
+        service.update('user-1', 'budget-1', { categoryId: 'cat-2' }),
       ).rejects.toThrow(BadRequestException);
 
       expect(prisma.budget.update).not.toHaveBeenCalled();
@@ -177,7 +238,6 @@ describe('BudgetsService', () => {
         id: 'cat-1',
         type: 'EXPENSE',
       } as any);
-
       prisma.budget.findFirst
         .mockResolvedValueOnce({
           id: 'budget-1',
@@ -186,18 +246,15 @@ describe('BudgetsService', () => {
           startDate: new Date('2026-08-01'),
           endDate: new Date('2026-08-31'),
           limitAmount: 1000000,
-        } as any)
-        .mockResolvedValueOnce(null);
-
+        } as any) // gọi từ findOwnedOrThrow
+        .mockResolvedValueOnce(null); // gọi từ assertNoDuplicatePeriod
       prisma.budget.update.mockResolvedValue({ id: 'budget-1' } as any);
 
       await service.update('user-1', 'budget-1', { limitAmount: 2000000 });
 
       expect(prisma.budget.findFirst).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            id: { not: 'budget-1' },
-          }),
+          where: expect.objectContaining({ id: { not: 'budget-1' } }),
         }),
       );
     });
