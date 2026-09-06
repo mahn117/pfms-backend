@@ -29,4 +29,5 @@ export enum ErrorCode {
 
   // Budget
   BUDGET_NOT_FOUND = 'BUDGET_NOT_FOUND',
+  BUDGET_PERIOD_OVERLAP = 'BUDGET_PERIOD_OVERLAP',
 }

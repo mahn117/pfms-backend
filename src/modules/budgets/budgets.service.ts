@@ -21,6 +21,13 @@ export class BudgetsService {
       await this.assertValidCategory(userId, dto.categoryId);
     }
 
+    await this.assertNoDuplicatePeriod(
+      userId,
+      dto.categoryId,
+      dto.startDate,
+      dto.endDate,
+    );
+
     return this.prisma.budget.create({
       data: {
         userId,
@@ -51,9 +58,20 @@ export class BudgetsService {
     const endDate = dto.endDate ?? existing.endDate.toISOString();
     this.assertValidPeriod(startDate, endDate);
 
-    if (dto.categoryId) {
-      await this.assertValidCategory(userId, dto.categoryId);
+    const finalCategoryId =
+      dto.categoryId !== undefined ? dto.categoryId : existing.categoryId;
+
+    if (finalCategoryId) {
+      await this.assertValidCategory(userId, finalCategoryId);
     }
+
+    await this.assertNoDuplicatePeriod(
+      userId,
+      finalCategoryId,
+      startDate,
+      endDate,
+      id,
+    );
 
     return this.prisma.budget.update({
       where: { id },
@@ -78,20 +96,41 @@ export class BudgetsService {
   async getProgress(userId: string, id: string) {
     const budget = await this.findOwnedOrThrow(userId, id);
 
+    let categoryFilter = {};
+
+    if (budget.categoryId) {
+      const categoryIds = await this.getCategoryAndDescendantIds(
+        userId,
+        budget.categoryId,
+      );
+
+      categoryFilter = {
+        categoryId: {
+          in: categoryIds,
+        },
+      };
+    }
+
     const spentAgg = await this.prisma.transaction.aggregate({
       where: {
         userId,
         deletedAt: null,
         type: TransactionType.EXPENSE,
-        date: { gte: budget.startDate, lte: budget.endDate },
-        ...(budget.categoryId ? { categoryId: budget.categoryId } : {}),
+        date: {
+          gte: budget.startDate,
+          lte: budget.endDate,
+        },
+        ...categoryFilter,
       },
-      _sum: { amount: true },
+      _sum: {
+        amount: true,
+      },
     });
 
     const spent = Number(spentAgg._sum.amount ?? 0);
     const limit = Number(budget.limitAmount);
     const remaining = limit - spent;
+
     const percentUsed =
       limit > 0 ? Math.round((spent / limit) * 10000) / 100 : 0;
 
@@ -108,6 +147,78 @@ export class BudgetsService {
       isOverThreshold80: percentUsed >= 80,
       isOverLimit: percentUsed >= 100,
     };
+  }
+
+  private async getCategoryAndDescendantIds(
+    userId: string,
+    rootCategoryId: string,
+  ): Promise<string[]> {
+    const categories = await this.prisma.category.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ userId }, { isSystem: true }],
+      },
+      select: {
+        id: true,
+        parentId: true,
+      },
+    });
+
+    const childrenMap = new Map<string, string[]>();
+
+    for (const category of categories) {
+      if (!category.parentId) continue;
+
+      const children = childrenMap.get(category.parentId) ?? [];
+
+      children.push(category.id);
+
+      childrenMap.set(category.parentId, children);
+    }
+
+    const categoryIds = new Set<string>([rootCategoryId]);
+    const queue = [rootCategoryId];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+
+      const children = childrenMap.get(currentId) ?? [];
+
+      for (const childId of children) {
+        if (categoryIds.has(childId)) continue;
+
+        categoryIds.add(childId);
+        queue.push(childId);
+      }
+    }
+
+    return [...categoryIds];
+  }
+
+  private async assertNoDuplicatePeriod(
+    userId: string,
+    categoryId: string | null | undefined,
+    startDate: string,
+    endDate: string,
+    excludeBudgetId?: string,
+  ) {
+    const duplicated = await this.prisma.budget.findFirst({
+      where: {
+        userId,
+        categoryId: categoryId ?? null,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        ...(excludeBudgetId ? { id: { not: excludeBudgetId } } : {}),
+      },
+    });
+
+    if (duplicated) {
+      throw new BadRequestException({
+        errorCode: ErrorCode.BUDGET_PERIOD_OVERLAP,
+        message:
+          'Đã tồn tại ngân sách khác cho cùng danh mục (hoặc ngân sách tổng) với cùng khoảng thời gian',
+      });
+    }
   }
 
   private async findOwnedOrThrow(userId: string, id: string) {
