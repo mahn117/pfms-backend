@@ -233,30 +233,28 @@ describe('BudgetsService', () => {
       expect(prisma.budget.update).not.toHaveBeenCalled();
     });
 
-    it('nên loại trừ chính nó khi kiểm tra trùng lặp (excludeBudgetId)', async () => {
+    it('không gọi assertNoDuplicatePeriod nếu không đổi categoryId', async () => {
+      prisma.budget.findFirst.mockResolvedValueOnce({
+        id: 'budget-1',
+        userId: 'user-1',
+        categoryId: 'cat-1',
+        startDate: new Date('2026-08-01'),
+        endDate: new Date('2026-08-31'),
+        limitAmount: 1000000,
+      } as any);
       prisma.category.findFirst.mockResolvedValue({
         id: 'cat-1',
         type: 'EXPENSE',
       } as any);
-      prisma.budget.findFirst
-        .mockResolvedValueOnce({
-          id: 'budget-1',
-          userId: 'user-1',
-          categoryId: 'cat-1',
-          startDate: new Date('2026-08-01'),
-          endDate: new Date('2026-08-31'),
-          limitAmount: 1000000,
-        } as any) // gọi từ findOwnedOrThrow
-        .mockResolvedValueOnce(null); // gọi từ assertNoDuplicatePeriod
       prisma.budget.update.mockResolvedValue({ id: 'budget-1' } as any);
 
       await service.update('user-1', 'budget-1', { limitAmount: 2000000 });
 
-      expect(prisma.budget.findFirst).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ id: { not: 'budget-1' } }),
-        }),
-      );
+      expect(prisma.budget.findFirst).toHaveBeenCalledTimes(1);
+      expect(prisma.budget.update).toHaveBeenCalledWith({
+        where: { id: 'budget-1' },
+        data: { categoryId: undefined, limitAmount: 2000000 },
+      });
     });
   });
 

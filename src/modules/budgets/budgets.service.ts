@@ -65,14 +65,18 @@ export class BudgetsService {
       await this.assertValidCategory(userId, finalCategoryId);
     }
 
-    await this.assertNoDuplicatePeriod(
-      userId,
-      finalCategoryId,
-      existing.startDate.toISOString(),
-      existing.endDate.toISOString(),
-      id,
-    );
-
+    if (
+      dto.categoryId !== undefined &&
+      dto.categoryId !== existing.categoryId
+    ) {
+      await this.assertNoDuplicatePeriod(
+        userId,
+        finalCategoryId,
+        existing.startDate.toISOString(),
+        existing.endDate.toISOString(),
+        id,
+      );
+    }
     return this.prisma.budget.update({
       where: { id },
       data: {
