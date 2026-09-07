@@ -12,6 +12,7 @@ import { WalletsModule } from './modules/wallets/wallets.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { GoalsModule } from './modules/goals/goals.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { GoalsModule } from './modules/goals/goals.module';
     TransactionsModule,
     BudgetsModule,
     GoalsModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
