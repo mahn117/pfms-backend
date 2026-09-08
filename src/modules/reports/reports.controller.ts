@@ -5,6 +5,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReportsService } from './reports.service';
 import { GetReportSummaryDto } from './dto/get-report-summary.dto';
 import { GetReportByCategoryDto } from './dto/get-report-by-category.dto';
+import { GetReportTrendDto } from './dto/get-report-trend.dto';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
@@ -19,6 +20,14 @@ export class ReportsController {
     @Query() query: GetReportSummaryDto,
   ) {
     return this.reportsService.getSummary(user.userId, query);
+  }
+
+  @Get('trend')
+  getTrend(
+    @CurrentUser() user: { userId: string },
+    @Query() query: GetReportTrendDto,
+  ) {
+    return this.reportsService.getTrend(user.userId, query);
   }
 
   @Get('by-category')
