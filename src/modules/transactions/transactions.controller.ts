@@ -73,11 +73,20 @@ export class TransactionsController {
       });
     }
 
-    return this.transactionsService.addAttachment(
+    return this.transactionsService.addAttachment(user.userId, id, file);
+  }
+
+  @Get(':id/attachment')
+  async getAttachment(
+    @CurrentUser() user: { userId: string },
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const filePath = await this.transactionsService.getAttachmentPath(
       user.userId,
       id,
-      `/uploads/${file.filename}`,
     );
+    res.sendFile(filePath);
   }
 
   @Get('export')
