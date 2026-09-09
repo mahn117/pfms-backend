@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { extname } from 'path';
 import { Request } from 'express';
 import { ErrorCode } from '../../../common/constants/error-codes';
@@ -12,18 +12,11 @@ type MulterFileFilterCallback = (
   acceptFile: boolean,
 ) => void;
 
+// Dùng memoryStorage: file chỉ nằm trong buffer (RAM), KHÔNG ghi xuống đĩa
+// tại bước interceptor. Việc ghi đĩa được dời vào TransactionsService,
+// SAU KHI đã xác nhận transaction thuộc đúng user (tránh orphan file).
 export const attachmentMulterOptions = {
-  storage: diskStorage({
-    destination: './uploads',
-    filename: (
-      req: Request,
-      file: Express.Multer.File,
-      callback: (error: Error | null, filename: string) => void,
-    ) => {
-      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      callback(null, `${uniqueSuffix}${extname(file.originalname)}`);
-    },
-  }),
+  storage: memoryStorage(),
   limits: { fileSize: UPLOAD_MAX_SIZE_MB * 1024 * 1024 },
   fileFilter: (
     req: Request,

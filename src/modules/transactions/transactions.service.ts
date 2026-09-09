@@ -11,6 +11,8 @@ import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { FindTransactionsDto } from './dto/find-transactions.dto';
 import { ExportTransactionsDto } from './dto/export-transactions.dto';
+import { promises as fs } from 'fs';
+import { basename, extname, join } from 'path';
 
 @Injectable()
 export class TransactionsService {
@@ -212,12 +214,35 @@ export class TransactionsService {
     };
   }
 
-  async addAttachment(userId: string, id: string, filePath: string) {
+  private readonly uploadDir = join(process.cwd(), 'uploads');
+
+  async addAttachment(userId: string, id: string, file: Express.Multer.File) {
     await this.findOwnedOrThrow(userId, id);
+
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const filename = `${uniqueSuffix}${extname(file.originalname)}`;
+
+    await fs.mkdir(this.uploadDir, { recursive: true });
+    await fs.writeFile(join(this.uploadDir, filename), file.buffer);
+
     return this.prisma.transaction.update({
       where: { id },
-      data: { attachmentUrl: filePath },
+      data: { attachmentUrl: `/uploads/${filename}` },
     });
+  }
+
+  async getAttachmentPath(userId: string, id: string): Promise<string> {
+    const transaction = await this.findOwnedOrThrow(userId, id);
+
+    if (!transaction.attachmentUrl) {
+      throw new NotFoundException({
+        errorCode: ErrorCode.ATTACHMENT_NOT_FOUND,
+        message: 'Giao dịch này chưa có file đính kèm',
+      });
+    }
+
+    const filename = basename(transaction.attachmentUrl);
+    return join(this.uploadDir, filename);
   }
 
   async findOne(userId: string, id: string) {
