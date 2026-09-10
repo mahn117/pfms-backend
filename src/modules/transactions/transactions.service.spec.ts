@@ -4,6 +4,13 @@ import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
 import { TransactionsService } from './transactions.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
+jest.mock('fs', () => ({
+  promises: {
+    mkdir: jest.fn().mockResolvedValue(undefined),
+    writeFile: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
 describe('TransactionsService', () => {
   let service: TransactionsService;
   let prisma: DeepMockProxy<PrismaService>;
@@ -185,15 +192,16 @@ describe('TransactionsService', () => {
         attachmentUrl: '/uploads/abc.jpg',
       } as any);
 
-      const result = await service.addAttachment(
-        'user-1',
-        'tx-1',
-        '/uploads/abc.jpg',
-      );
+      const mockFile = {
+        originalname: 'hoa-don.jpg',
+        buffer: Buffer.from('fake-file-content'),
+      } as Express.Multer.File;
+
+      const result = await service.addAttachment('user-1', 'tx-1', mockFile);
 
       expect(prisma.transaction.update).toHaveBeenCalledWith({
         where: { id: 'tx-1' },
-        data: { attachmentUrl: '/uploads/abc.jpg' },
+        data: { attachmentUrl: expect.stringMatching(/^\/uploads\/.+\.jpg$/) },
       });
       expect(result.attachmentUrl).toBe('/uploads/abc.jpg');
     });
@@ -202,7 +210,10 @@ describe('TransactionsService', () => {
       prisma.transaction.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.addAttachment('user-1', 'tx-la', '/uploads/abc.jpg'),
+        service.addAttachment('user-1', 'tx-la', {
+          originalname: 'file.jpg',
+          buffer: Buffer.from('x'),
+        } as Express.Multer.File),
       ).rejects.toThrow(NotFoundException);
     });
   });
