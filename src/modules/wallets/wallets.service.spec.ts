@@ -128,4 +128,118 @@ describe('WalletsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('reconcile', () => {
+    it('nên không tạo giao dịch nếu actualBalance khớp currentBalance', async () => {
+      prisma.wallet.findFirst.mockResolvedValue({
+        id: 'wallet-1',
+        userId: 'user-1',
+        currentBalance: 1000000,
+      } as any);
+
+      const result = await service.reconcile('user-1', 'wallet-1', {
+        actualBalance: 1000000,
+      });
+
+      expect(result).toEqual({
+        walletId: 'wallet-1',
+        currentBalance: 1000000,
+        actualBalance: 1000000,
+        difference: 0,
+        adjustmentCreated: false,
+        message: 'Số dư khớp, không cần điều chỉnh',
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('nên chỉ trả về preview, KHÔNG tạo giao dịch nếu confirm = false', async () => {
+      prisma.wallet.findFirst.mockResolvedValue({
+        id: 'wallet-1',
+        userId: 'user-1',
+        currentBalance: 1000000,
+      } as any);
+
+      const result = await service.reconcile('user-1', 'wallet-1', {
+        actualBalance: 1100000,
+        confirm: false,
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          difference: 100000,
+          adjustmentCreated: false,
+        }),
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('nên tạo giao dịch ADJUSTMENT và set currentBalance = actualBalance khi confirm = true (chênh lệch dương)', async () => {
+      prisma.wallet.findFirst.mockResolvedValue({
+        id: 'wallet-1',
+        userId: 'user-1',
+        currentBalance: 1000000,
+      } as any);
+      prisma.$transaction.mockImplementation((ops: any) => Promise.all(ops));
+      prisma.transaction.create.mockResolvedValue({ id: 'tx-1' } as any);
+      prisma.wallet.update.mockResolvedValue({} as any);
+
+      const result = await service.reconcile('user-1', 'wallet-1', {
+        actualBalance: 1100000,
+        confirm: true,
+      });
+
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'ADJUSTMENT',
+            amount: 100000,
+            walletId: 'wallet-1',
+          }),
+        }),
+      );
+      expect(prisma.wallet.update).toHaveBeenCalledWith({
+        where: { id: 'wallet-1' },
+        data: { currentBalance: 1100000 },
+      });
+      expect(result).toEqual(
+        expect.objectContaining({
+          adjustmentCreated: true,
+          transactionId: 'tx-1',
+          currentBalance: 1100000,
+        }),
+      );
+    });
+
+    it('nên tạo amount ÂM khi actualBalance nhỏ hơn currentBalance', async () => {
+      prisma.wallet.findFirst.mockResolvedValue({
+        id: 'wallet-1',
+        userId: 'user-1',
+        currentBalance: 1000000,
+      } as any);
+      prisma.$transaction.mockImplementation((ops: any) => Promise.all(ops));
+      prisma.transaction.create.mockResolvedValue({ id: 'tx-2' } as any);
+      prisma.wallet.update.mockResolvedValue({} as any);
+
+      await service.reconcile('user-1', 'wallet-1', {
+        actualBalance: 700000,
+        confirm: true,
+      });
+
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ amount: -300000 }),
+        }),
+      );
+    });
+
+    it('nên ném NotFoundException nếu ví không thuộc user', async () => {
+      prisma.wallet.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.reconcile('user-1', 'wallet-cua-user-2', {
+          actualBalance: 500000,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
 });

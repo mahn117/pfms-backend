@@ -16,6 +16,7 @@ import { WalletsService } from './wallets.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 import { UpdateWalletDto } from './dto/update-wallet.dto';
 import { GetWalletSummaryDto } from './dto/get-wallet-summary.dto';
+import { ReconcileWalletDto } from './dto/reconcile-wallet.dto';
 
 @ApiTags('Wallets')
 @ApiBearerAuth()
@@ -49,6 +50,15 @@ export class WalletsController {
     @Query() query: GetWalletSummaryDto,
   ) {
     return this.walletsService.getSummary(user.userId, id, query);
+  }
+
+  @Post(':id/reconcile')
+  reconcile(
+    @CurrentUser() user: { userId: string },
+    @Param('id') id: string,
+    @Body() dto: ReconcileWalletDto,
+  ) {
+    return this.walletsService.reconcile(user.userId, id, dto);
   }
 
   @Patch(':id')
