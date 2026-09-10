@@ -5,7 +5,7 @@ import { ErrorCode } from '../../common/constants/error-codes';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 import { UpdateWalletDto } from './dto/update-wallet.dto';
 import { GetWalletSummaryDto } from './dto/get-wallet-summary.dto';
-
+import { ReconcileWalletDto } from './dto/reconcile-wallet.dto';
 @Injectable()
 export class WalletsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -99,6 +99,63 @@ export class WalletsService {
       totalExpense: expenseAgg._sum.amount ?? 0,
       from: query.from ?? null,
       to: query.to ?? null,
+    };
+  }
+
+  async reconcile(userId: string, id: string, dto: ReconcileWalletDto) {
+    const wallet = await this.findOwnedOrThrow(userId, id);
+
+    const currentBalance = Number(wallet.currentBalance);
+    const difference = dto.actualBalance - currentBalance;
+
+    if (difference === 0) {
+      return {
+        walletId: wallet.id,
+        currentBalance,
+        actualBalance: dto.actualBalance,
+        difference: 0,
+        adjustmentCreated: false,
+        message: 'Số dư khớp, không cần điều chỉnh',
+      };
+    }
+
+    if (!dto.confirm) {
+      return {
+        walletId: wallet.id,
+        currentBalance,
+        actualBalance: dto.actualBalance,
+        difference,
+        adjustmentCreated: false,
+        message:
+          'Có chênh lệch số dư. Gửi lại với confirm = true để tạo giao dịch điều chỉnh',
+      };
+    }
+
+    const [transaction] = await this.prisma.$transaction([
+      this.prisma.transaction.create({
+        data: {
+          userId,
+          walletId: wallet.id,
+          type: TransactionType.ADJUSTMENT,
+          amount: difference,
+          date: new Date(),
+          note: `Đối soát: điều chỉnh số dư từ ${currentBalance} thành ${dto.actualBalance}`,
+        },
+      }),
+      this.prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { currentBalance: dto.actualBalance },
+      }),
+    ]);
+
+    return {
+      walletId: wallet.id,
+      currentBalance: dto.actualBalance,
+      actualBalance: dto.actualBalance,
+      difference,
+      adjustmentCreated: true,
+      transactionId: transaction.id,
+      message: 'Đã tạo giao dịch điều chỉnh thành công',
     };
   }
 
