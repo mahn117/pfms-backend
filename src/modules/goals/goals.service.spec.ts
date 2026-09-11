@@ -192,4 +192,51 @@ describe('GoalsService', () => {
       });
     });
   });
+
+  describe('create', () => {
+    it('nên tạo goal thành công kèm deadline khi có truyền', async () => {
+      prisma.goal.create.mockResolvedValue({ id: 'goal-1' } as any);
+
+      await service.create('user-1', {
+        name: 'Mua xe máy',
+        targetAmount: 1000000,
+        deadline: '2026-12-31',
+      });
+
+      expect(prisma.goal.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-1',
+          name: 'Mua xe máy',
+          targetAmount: 1000000,
+          deadline: new Date('2026-12-31'),
+        },
+      });
+    });
+
+    it('nên tạo goal thành công với deadline = undefined khi không truyền', async () => {
+      prisma.goal.create.mockResolvedValue({ id: 'goal-1' } as any);
+
+      await service.create('user-1', {
+        name: 'Mua xe máy',
+        targetAmount: 1000000,
+      });
+
+      expect(prisma.goal.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ deadline: undefined }),
+      });
+    });
+  });
+
+  describe('findAll', () => {
+    it('nên query đúng theo userId, sắp xếp mới nhất trước', async () => {
+      prisma.goal.findMany.mockResolvedValue([]);
+
+      await service.findAll('user-1');
+
+      expect(prisma.goal.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+  });
 });

@@ -242,4 +242,40 @@ describe('WalletsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('findAll', () => {
+    it('nên query đúng theo userId, loại trừ ví đã xoá mềm', async () => {
+      prisma.wallet.findMany.mockResolvedValue([]);
+
+      await service.findAll('user-1');
+
+      expect(prisma.wallet.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', deletedAt: null },
+        orderBy: { createdAt: 'asc' },
+      });
+    });
+  });
+
+  describe('update - thành công', () => {
+    it('nên update tên/loại/trạng thái lưu trữ khi ví thuộc đúng user', async () => {
+      prisma.wallet.findFirst.mockResolvedValue({
+        id: 'wallet-1',
+        userId: 'user-1',
+      } as any);
+      prisma.wallet.update.mockResolvedValue({ id: 'wallet-1' } as any);
+
+      await service.update('user-1', 'wallet-1', {
+        name: 'Ví đổi tên',
+        isArchived: true,
+      });
+
+      expect(prisma.wallet.update).toHaveBeenCalledWith({
+        where: { id: 'wallet-1' },
+        data: expect.objectContaining({
+          name: 'Ví đổi tên',
+          isArchived: true,
+        }),
+      });
+    });
+  });
 });

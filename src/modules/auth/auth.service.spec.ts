@@ -12,6 +12,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let prisma: DeepMockProxy<PrismaService>;
   let jwtService: JwtService;
+  let redisService: { set: jest.Mock; get: jest.Mock; del: jest.Mock };
 
   const configValues: Record<string, string> = {
     JWT_ACCESS_SECRET: 'access-secret',
@@ -50,6 +51,7 @@ describe('AuthService', () => {
 
     service = module.get(AuthService);
     jwtService = module.get(JwtService);
+    redisService = module.get(RedisService);
   });
 
   describe('register', () => {
@@ -155,6 +157,146 @@ describe('AuthService', () => {
 
       await expect(
         service.refresh({ refreshToken: 'old-token' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('nên trả về message chung và KHÔNG gọi Redis nếu email không tồn tại (chống dò email)', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      const result = await service.forgotPassword({
+        email: 'khong-ton-tai@b.com',
+      });
+
+      expect(result).toEqual({ message: 'Nếu email tồn tại, OTP đã được gửi' });
+      expect(redisService.set).not.toHaveBeenCalled();
+    });
+
+    it('nên sinh OTP, hash và lưu vào Redis với đúng key + TTL khi email tồn tại', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+      } as any);
+
+      const result = await service.forgotPassword({ email: 'a@b.com' });
+
+      expect(redisService.set).toHaveBeenCalledWith(
+        'otp:reset-password:user-1',
+        expect.any(String),
+        300, // 5 * 60
+      );
+      expect(result).toEqual({ message: 'Nếu email tồn tại, OTP đã được gửi' });
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('nên ném UnauthorizedException nếu email không tồn tại', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.resetPassword({
+          email: 'khong-ton-tai@b.com',
+          otp: '123456',
+          newPassword: 'NewPassword123',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('nên ném UnauthorizedException nếu không tìm thấy OTP trong Redis (hết hạn/chưa từng gửi)', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+      } as any);
+      redisService.get.mockResolvedValue(null);
+
+      await expect(
+        service.resetPassword({
+          email: 'a@b.com',
+          otp: '123456',
+          newPassword: 'NewPassword123',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('nên ném UnauthorizedException nếu OTP sai', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+      } as any);
+      const correctHash = await bcrypt.hash('654321', 10);
+      redisService.get.mockResolvedValue(correctHash);
+
+      await expect(
+        service.resetPassword({
+          email: 'a@b.com',
+          otp: '123456', // sai
+          newPassword: 'NewPassword123',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('nên đổi mật khẩu, thu hồi refresh token và xoá OTP khỏi Redis khi OTP đúng', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+      } as any);
+      const correctHash = await bcrypt.hash('123456', 10);
+      redisService.get.mockResolvedValue(correctHash);
+      prisma.$transaction.mockImplementation((ops: any) => Promise.all(ops));
+      prisma.user.update.mockResolvedValue({} as any);
+      prisma.refreshToken.updateMany.mockResolvedValue({} as any);
+
+      const result = await service.resetPassword({
+        email: 'a@b.com',
+        otp: '123456',
+        newPassword: 'NewPassword123',
+      });
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'user-1' } }),
+      );
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-1', revokedAt: null },
+        }),
+      );
+      expect(redisService.del).toHaveBeenCalledWith(
+        'otp:reset-password:user-1',
+      );
+      expect(result).toEqual({ message: 'Đặt lại mật khẩu thành công' });
+    });
+  });
+
+  describe('logout', () => {
+    it('nên thu hồi đúng refresh token theo userId + tokenHash', async () => {
+      (jwtService.verify as jest.Mock).mockReturnValue({
+        sub: 'user-1',
+        email: 'a@b.com',
+      });
+      prisma.refreshToken.updateMany.mockResolvedValue({} as any);
+
+      const result = await service.logout({ refreshToken: 'some-token' });
+
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'user-1',
+            revokedAt: null,
+          }),
+          data: expect.objectContaining({ revokedAt: expect.any(Date) }),
+        }),
+      );
+      expect(result).toEqual({ message: 'Đăng xuất thành công' });
+    });
+
+    it('nên ném UnauthorizedException nếu refreshToken không verify được', async () => {
+      (jwtService.verify as jest.Mock).mockImplementation(() => {
+        throw new Error('invalid token');
+      });
+
+      await expect(
+        service.logout({ refreshToken: 'token-loi' }),
       ).rejects.toThrow(UnauthorizedException);
     });
   });
