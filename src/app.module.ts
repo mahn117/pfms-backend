@@ -13,7 +13,7 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { ReportsModule } from './modules/reports/reports.module';
-
+import { HealthModule } from './modules/health/health.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -30,6 +30,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     BudgetsModule,
     GoalsModule,
     ReportsModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
