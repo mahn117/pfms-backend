@@ -27,9 +27,6 @@ Thumbs.db
 /src/generated/prisma
 
 
-PROJECT_PLAN.md
-SYSTEM_DESIGN.md
-
 # TypeScript incremental build cache
 *.tsbuildinfo
 
