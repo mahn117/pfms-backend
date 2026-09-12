@@ -44,9 +44,11 @@
     "ioredis": "^6.0.0",
     "joi": "^18.2.3",
     "multer": "^2.3.0",
+    "nestjs-pino": "^5.1.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.23.0",
+    "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
