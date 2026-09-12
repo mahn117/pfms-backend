@@ -44,7 +44,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       errorCode = this.mapStatusToErrorCode(statusCode, exception);
     } else if (exception instanceof Error) {
-      this.logger.error(exception.message, exception.stack);
+      this.logger.error('Unhandled exception');
     }
 
     response.status(statusCode).json({
@@ -54,7 +54,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message,
       ...(errors ? { errors } : {}),
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path: request.url.split('?')[0],
     });
   }
 

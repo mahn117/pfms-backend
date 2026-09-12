@@ -14,8 +14,11 @@ import { BudgetsModule } from './modules/budgets/budgets.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { HealthModule } from './modules/health/health.module';
+import { LoggerModule } from 'nestjs-pino';
+import { httpLoggerOptions } from './common/logging/http-logger.config';
 @Module({
   imports: [
+    LoggerModule.forRoot({ pinoHttp: httpLoggerOptions }),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: envValidationSchema,
