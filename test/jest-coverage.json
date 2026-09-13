@@ -1,0 +1,32 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testEnvironment": "node",
+  "testMatch": [
+    "<rootDir>/src/**/*.spec.ts",
+    "<rootDir>/test/**/*.e2e-spec.ts"
+  ],
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+    "^@/(.*)$": "<rootDir>/src/$1"
+  },
+  "collectCoverageFrom": [
+    "<rootDir>/src/**/*.{ts,js}",
+    "!<rootDir>/src/**/*.spec.ts",
+    "!<rootDir>/src/**/*.e2e-spec.ts",
+    "!<rootDir>/src/**/*.test.ts",
+    "!<rootDir>/src/generated/**",
+    "!<rootDir>/src/prisma/migrations/**",
+    "!<rootDir>/src/prisma/seed.ts"
+  ],
+  "coverageDirectory": "<rootDir>/coverage",
+  "coverageThreshold": {
+    "global": {
+      "lines": 80,
+      "branches": 80
+    }
+  }
+}
