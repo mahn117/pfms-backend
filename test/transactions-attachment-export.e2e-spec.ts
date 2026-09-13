@@ -6,6 +6,7 @@ import { join } from 'path';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
+import { AuthRateLimitGuard } from '../src/modules/auth/auth-rate-limit.guard';
 
 describe('Transactions - Attachment & Export (e2e)', () => {
   let app: NestExpressApplication;
@@ -20,7 +21,10 @@ describe('Transactions - Attachment & Export (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideGuard(AuthRateLimitGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = moduleFixture.createNestApplication<NestExpressApplication>();
 
