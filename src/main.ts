@@ -13,6 +13,14 @@ async function bootstrap() {
   });
   app.useLogger(app.get(Logger));
 
+  const trustedProxyIps = process.env.TRUSTED_PROXY_IPS;
+  if (trustedProxyIps) {
+    app.set(
+      'trust proxy',
+      trustedProxyIps.split(',').map((ip) => ip.trim()),
+    );
+  }
+
   const apiPrefix = process.env.API_PREFIX ?? 'api/v1';
   app.setGlobalPrefix(apiPrefix);
 
