@@ -1,6 +1,11 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  ApiErrors,
+  ApiSuccess,
+  responseSchemas,
+} from '@/common/swagger/response-schemas';
+import {
   HealthCheckService,
   HealthCheck,
   HealthCheckResult,
@@ -19,6 +24,8 @@ export class HealthController {
   ) {}
 
   @Get()
+  @ApiSuccess(200, responseSchemas.health)
+  @ApiErrors(503)
   @HealthCheck()
   async check() {
     try {

@@ -4,6 +4,7 @@ import { IsBoolean, IsNumber, IsOptional, Min } from 'class-validator';
 export class ReconcileWalletDto {
   @ApiProperty({
     example: 1500000,
+    minimum: 0,
     description:
       'Số dư thực tế người dùng nhập tay (kiểm đếm thật), dùng để so sánh với số dư hệ thống tính toán',
   })

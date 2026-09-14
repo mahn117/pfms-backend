@@ -10,7 +10,8 @@ import {
 
 export class CreateTransferDto {
   @ApiProperty({
-    example: 'uuid-vi-nguon',
+    example: '11111111-1111-4111-8111-111111111111',
+    format: 'uuid',
     description:
       'ID ví nguồn (nơi tiền được trừ ra), phải thuộc quyền sở hữu của user hiện tại',
   })
@@ -18,7 +19,8 @@ export class CreateTransferDto {
   walletId!: string;
 
   @ApiProperty({
-    example: 'uuid-vi-dich',
+    example: '33333333-3333-4333-8333-333333333333',
+    format: 'uuid',
     description:
       'ID ví đích (nơi tiền được cộng vào), phải thuộc quyền sở hữu của user hiện tại và khác với walletId',
   })
@@ -27,6 +29,8 @@ export class CreateTransferDto {
 
   @ApiProperty({
     example: 100000,
+    minimum: 0,
+    exclusiveMinimum: true,
     description: 'Số tiền chuyển khoản, phải lớn hơn 0',
   })
   @IsNumber()
@@ -43,6 +47,7 @@ export class CreateTransferDto {
 
   @ApiPropertyOptional({
     example: 'Chuyển tiền tiết kiệm',
+    nullable: true,
     description: 'Ghi chú cho giao dịch chuyển khoản (tuỳ chọn)',
   })
   @IsOptional()

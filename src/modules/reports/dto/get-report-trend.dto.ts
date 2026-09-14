@@ -5,6 +5,7 @@ import { IsTrendPeriod } from '../../../common/validators/is-trend-period.valida
 export class GetReportTrendDto {
   @ApiPropertyOptional({
     enum: ['week', 'month'],
+    example: 'month',
     default: 'month',
     description: 'Đơn vị nhóm dữ liệu xu hướng: theo tuần hoặc theo tháng',
   })
@@ -29,7 +30,8 @@ export class GetReportTrendDto {
   to!: string;
 
   @ApiPropertyOptional({
-    example: 'uuid-cua-vi',
+    example: '11111111-1111-4111-8111-111111111111',
+    format: 'uuid',
     description:
       'Lọc theo 1 ví cụ thể. Bỏ trống nếu muốn tổng hợp trên tất cả các ví của user',
   })

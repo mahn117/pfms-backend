@@ -19,6 +19,8 @@ export class CreateGoalDto {
 
   @ApiProperty({
     example: 20000000,
+    minimum: 0,
+    exclusiveMinimum: true,
     description: 'Số tiền mục tiêu cần đạt được, phải lớn hơn 0',
   })
   @IsNumber()
