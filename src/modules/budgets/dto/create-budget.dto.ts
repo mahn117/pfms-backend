@@ -15,7 +15,9 @@ import { BudgetPeriodType } from '@/generated/prisma/client';
 
 export class CreateBudgetDto {
   @ApiPropertyOptional({
-    example: 'uuid-cua-danh-muc',
+    example: '22222222-2222-4222-8222-222222222222',
+    nullable: true,
+    format: 'uuid',
     description:
       'ID danh mục áp dụng ngân sách. Bỏ trống nếu là ngân sách tổng (áp dụng cho tất cả danh mục)',
   })
@@ -34,6 +36,7 @@ export class CreateBudgetDto {
 
   @ApiPropertyOptional({
     example: '2026-08',
+    pattern: '^\\d{4}-(0[1-9]|1[0-2])$',
     description:
       'Tháng áp dụng ngân sách, định dạng YYYY-MM. Bắt buộc khi periodType = MONTH, không được gửi khi periodType = CUSTOM',
   })
@@ -77,6 +80,8 @@ export class CreateBudgetDto {
 
   @ApiProperty({
     example: 2000000,
+    minimum: 0,
+    exclusiveMinimum: true,
     description: 'Hạn mức chi tiêu cho kỳ ngân sách này, phải lớn hơn 0',
   })
   @IsNumber()

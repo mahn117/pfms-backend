@@ -13,7 +13,8 @@ import { TransactionType } from '@/generated/prisma/client';
 
 export class FindTransactionsDto {
   @ApiPropertyOptional({
-    example: 'uuid-cua-vi',
+    example: '11111111-1111-4111-8111-111111111111',
+    format: 'uuid',
     description: 'Lọc giao dịch theo ví cụ thể',
   })
   @IsOptional()
@@ -21,7 +22,8 @@ export class FindTransactionsDto {
   walletId?: string;
 
   @ApiPropertyOptional({
-    example: 'uuid-cua-danh-muc',
+    example: '22222222-2222-4222-8222-222222222222',
+    format: 'uuid',
     description: 'Lọc giao dịch theo danh mục cụ thể',
   })
   @IsOptional()
@@ -30,6 +32,7 @@ export class FindTransactionsDto {
 
   @ApiPropertyOptional({
     enum: TransactionType,
+    example: TransactionType.EXPENSE,
     description:
       'Lọc giao dịch theo loại: INCOME, EXPENSE, TRANSFER hoặc ADJUSTMENT',
   })
@@ -74,6 +77,7 @@ export class FindTransactionsDto {
 
   @ApiPropertyOptional({
     enum: ['date', 'amount'],
+    example: 'date',
     default: 'date',
     description: 'Sắp xếp theo trường ngày hoặc số tiền',
   })
@@ -83,6 +87,7 @@ export class FindTransactionsDto {
 
   @ApiPropertyOptional({
     enum: ['asc', 'desc'],
+    example: 'desc',
     default: 'desc',
     description: 'Thứ tự sắp xếp: tăng dần (asc) hoặc giảm dần (desc)',
   })
@@ -93,6 +98,8 @@ export class FindTransactionsDto {
   @ApiPropertyOptional({
     example: 1,
     default: 1,
+    type: 'integer',
+    minimum: 1,
     description: 'Số trang, bắt đầu từ 1',
   })
   @IsOptional()
@@ -104,6 +111,8 @@ export class FindTransactionsDto {
   @ApiPropertyOptional({
     example: 20,
     default: 20,
+    type: 'integer',
+    minimum: 1,
     description: 'Số lượng giao dịch trên mỗi trang',
   })
   @IsOptional()

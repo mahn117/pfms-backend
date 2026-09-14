@@ -28,6 +28,7 @@ export class CreateCategoryDto {
 
   @ApiPropertyOptional({
     example: 'fa-utensils',
+    nullable: true,
     description: 'Tên icon hiển thị cho danh mục (tuỳ chọn)',
   })
   @IsOptional()
@@ -35,7 +36,9 @@ export class CreateCategoryDto {
   icon?: string;
 
   @ApiPropertyOptional({
-    example: 'uuid-cua-danh-muc-cha',
+    example: '22222222-2222-4222-8222-222222222222',
+    nullable: true,
+    format: 'uuid',
     description:
       'ID của danh mục cha, dùng để tạo cấu trúc cây. Bỏ trống nếu đây là danh mục gốc',
   })

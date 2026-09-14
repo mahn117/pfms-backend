@@ -13,7 +13,20 @@ import {
   UploadedFile,
   BadRequestException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiTags,
+  ApiConsumes,
+  ApiBody,
+  ApiProduces,
+  ApiResponse,
+} from '@nestjs/swagger';
+import {
+  ApiErrors,
+  ApiSuccess,
+  arrayOf,
+  responseSchemas,
+} from '@/common/swagger/response-schemas';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { TransactionsService } from './transactions.service';
@@ -29,12 +42,15 @@ import { stringify } from 'csv-stringify';
 import { ErrorCode } from '@/common/constants/error-codes';
 @ApiTags('Transactions')
 @ApiBearerAuth()
+@ApiErrors(401)
 @UseGuards(JwtAuthGuard)
 @Controller('transactions')
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Post()
+  @ApiSuccess(201, responseSchemas.transaction)
+  @ApiErrors(400, 404)
   create(
     @CurrentUser() user: { userId: string },
     @Body() dto: CreateTransactionDto,
@@ -43,6 +59,8 @@ export class TransactionsController {
   }
 
   @Post('transfer')
+  @ApiSuccess(201, responseSchemas.transaction)
+  @ApiErrors(400, 404)
   createTransfer(
     @CurrentUser() user: { userId: string },
     @Body() dto: CreateTransferDto,
@@ -51,13 +69,23 @@ export class TransactionsController {
   }
 
   @Post(':id/attachment')
+  @ApiSuccess(201, responseSchemas.transaction)
+  @ApiErrors(400, 404, 413)
   @UseInterceptors(FileInterceptor('file', attachmentMulterOptions))
   @ApiConsumes('multipart/form-data')
   @ApiBody({
+    required: true,
+    description:
+      'File JPG, JPEG, PNG hoặc PDF; giới hạn dung lượng theo UPLOAD_MAX_SIZE_MB (mặc định 5 MB)',
     schema: {
       type: 'object',
+      required: ['file'],
       properties: {
-        file: { type: 'string', format: 'binary' },
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Hoá đơn hoặc chứng từ đính kèm',
+        },
       },
     },
   })
@@ -77,6 +105,18 @@ export class TransactionsController {
   }
 
   @Get(':id/attachment')
+  @ApiProduces('image/jpeg', 'image/png', 'application/pdf')
+  @ApiResponse({
+    status: 200,
+    description: 'Trả trực tiếp nội dung file đính kèm; không có JSON envelope',
+    content: Object.fromEntries(
+      ['image/jpeg', 'image/png', 'application/pdf'].map((type) => [
+        type,
+        { schema: { type: 'string', format: 'binary' } },
+      ]),
+    ),
+  })
+  @ApiErrors(404)
   async getAttachment(
     @CurrentUser() user: { userId: string },
     @Param('id') id: string,
@@ -90,6 +130,14 @@ export class TransactionsController {
   }
 
   @Get('export')
+  @ApiProduces('text/csv')
+  @ApiResponse({
+    status: 200,
+    description:
+      'CSV UTF-8 có BOM, trả trực tiếp dưới dạng attachment; không có JSON envelope',
+    content: { 'text/csv': { schema: { type: 'string', format: 'binary' } } },
+  })
+  @ApiErrors(400)
   async exportCsv(
     @CurrentUser() user: { userId: string },
     @Query() query: ExportTransactionsDto,
@@ -129,6 +177,8 @@ export class TransactionsController {
   }
 
   @Get()
+  @ApiSuccess(200, arrayOf(responseSchemas.transaction), true)
+  @ApiErrors(400)
   findAll(
     @CurrentUser() user: { userId: string },
     @Query() query: FindTransactionsDto,
@@ -137,11 +187,15 @@ export class TransactionsController {
   }
 
   @Get(':id')
+  @ApiSuccess(200, responseSchemas.transaction)
+  @ApiErrors(404)
   findOne(@CurrentUser() user: { userId: string }, @Param('id') id: string) {
     return this.transactionsService.findOne(user.userId, id);
   }
 
   @Patch(':id')
+  @ApiSuccess(200, responseSchemas.transaction)
+  @ApiErrors(400, 404)
   update(
     @CurrentUser() user: { userId: string },
     @Param('id') id: string,
@@ -151,6 +205,8 @@ export class TransactionsController {
   }
 
   @Delete(':id')
+  @ApiSuccess(200, responseSchemas.message)
+  @ApiErrors(404)
   remove(@CurrentUser() user: { userId: string }, @Param('id') id: string) {
     return this.transactionsService.remove(user.userId, id);
   }

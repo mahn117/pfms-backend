@@ -5,7 +5,10 @@ import { CreateWalletDto } from './create-wallet.dto';
 export class UpdateWalletDto extends PartialType(
   OmitType(CreateWalletDto, ['initialBalance'] as const),
 ) {
-  @ApiPropertyOptional({ example: false })
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Đánh dấu ví đã lưu trữ hoặc mở lại ví',
+  })
   @IsOptional()
   @IsBoolean()
   isArchived?: boolean;

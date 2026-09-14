@@ -23,7 +23,8 @@ export class CreateTransactionDto {
   type!: TransactionType;
 
   @ApiProperty({
-    example: 'uuid-cua-vi',
+    example: '11111111-1111-4111-8111-111111111111',
+    format: 'uuid',
     description:
       'ID của ví thực hiện giao dịch, phải thuộc quyền sở hữu của user hiện tại',
   })
@@ -31,7 +32,8 @@ export class CreateTransactionDto {
   walletId!: string;
 
   @ApiProperty({
-    example: 'uuid-cua-danh-muc',
+    example: '22222222-2222-4222-8222-222222222222',
+    format: 'uuid',
     description:
       'ID danh mục gắn với giao dịch, phải cùng loại (INCOME/EXPENSE) với type của giao dịch',
   })
@@ -40,6 +42,8 @@ export class CreateTransactionDto {
 
   @ApiProperty({
     example: 50000,
+    minimum: 0,
+    exclusiveMinimum: true,
     description: 'Số tiền giao dịch, phải lớn hơn 0',
   })
   @IsNumber()
@@ -56,6 +60,7 @@ export class CreateTransactionDto {
 
   @ApiPropertyOptional({
     example: 'Ăn trưa',
+    nullable: true,
     description: 'Ghi chú cho giao dịch (tuỳ chọn)',
   })
   @IsOptional()

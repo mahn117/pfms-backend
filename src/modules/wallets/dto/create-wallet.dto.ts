@@ -30,6 +30,7 @@ export class CreateWalletDto {
   @ApiPropertyOptional({
     example: 0,
     default: 0,
+    minimum: 0,
     description:
       'Số dư ban đầu khi tạo ví. currentBalance sẽ được khởi tạo bằng giá trị này',
   })
