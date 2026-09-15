@@ -156,7 +156,7 @@ Lệnh này không xóa named volume. Không dùng tùy chọn `--volumes` nếu
 | `UPLOAD_STORAGE`       | Không                 | `local`                                                    | Validation chấp nhận `local` hoặc `s3`, nhưng implementation hiện chỉ lưu local.                                    |
 | `UPLOAD_MAX_SIZE_MB`   | Không                 | `5`                                                        | Dung lượng tối đa của file đính kèm, tính theo MB.                                                                  |
 
-Luồng quên mật khẩu hiện lưu OTP trong Redis và ghi OTP ra console với nhãn development-only; chưa tích hợp email/SMS provider.
+Luồng quên mật khẩu hiện lưu hash OTP trong Redis với TTL 5 phút và không ghi plaintext OTP ra console; hệ thống chưa tích hợp email/SMS provider thực tế.
 
 ## Prisma và database
 
@@ -351,7 +351,7 @@ Project hiện chưa có cấu hình image registry/pull, Kubernetes, managed da
 - Không commit `.env`, `.env.test` hoặc secret vào Git.
 - Không chạy seed demo trên production.
 - Local upload hiện nằm trong Docker named volume; chưa có object storage/S3 thực tế.
-- OTP quên mật khẩu hiện được log ra console và chưa có email/SMS provider, nên chưa phù hợp cho production thật.
+- OTP quên mật khẩu được lưu dưới dạng hash trong Redis với TTL 5 phút và không được ghi plaintext ra console; hệ thống hiện chưa có email/SMS provider thực tế.
 - Project chưa cấu hình reverse proxy hoặc TLS/HTTPS.
 - Project chưa có CD tự động; GitHub Actions hiện chỉ thực hiện CI cho pull request vào `main`.
 - Cần tự thiết lập backup, giám sát, domain, TLS và chính sách vận hành phù hợp trước khi public hệ thống.
