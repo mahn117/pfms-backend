@@ -292,7 +292,7 @@ export class TransactionsService {
     }
   }
 
-  private async findOwnedOrThrow(userId: string, id: string) {
+  async findOwnedOrThrow(userId: string, id: string) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, userId, deletedAt: null },
     });

@@ -37,6 +37,7 @@ import { CreateTransferDto } from './dto/create-transfer.dto';
 import { FindTransactionsDto } from './dto/find-transactions.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { attachmentMulterOptions } from './config/upload.config';
+import { TransactionOwnershipGuard } from './guards/transaction-ownership.guard';
 import type { Response } from 'express';
 import { stringify } from 'csv-stringify';
 import { ErrorCode } from '@/common/constants/error-codes';
@@ -71,6 +72,7 @@ export class TransactionsController {
   @Post(':id/attachment')
   @ApiSuccess(201, responseSchemas.transaction)
   @ApiErrors(400, 404, 413)
+  @UseGuards(TransactionOwnershipGuard)
   @UseInterceptors(FileInterceptor('file', attachmentMulterOptions))
   @ApiConsumes('multipart/form-data')
   @ApiBody({
