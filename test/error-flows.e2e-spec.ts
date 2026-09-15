@@ -231,15 +231,15 @@ describe('Error flows (e2e)', () => {
   });
 
   describe('cross-user ownership', () => {
-    it('A sửa category của B nhận 403; category của B giữ nguyên', async () => {
+    it('A sửa category của B nhận 404; category của B giữ nguyên', async () => {
       const categoryId = await createCategory(tokenB);
       const path = `/api/v1/categories/${categoryId}`;
       const denied = await request(app.getHttpServer())
         .patch(path)
         .set('Authorization', `Bearer ${tokenA}`)
         .send({ name: 'Tên bị sửa bởi A' })
-        .expect(403);
-      expectError(denied.body, 403, 'FORBIDDEN', path);
+        .expect(404);
+      expectError(denied.body, 404, 'CATEGORY_NOT_FOUND', path);
 
       const owned = await request(app.getHttpServer())
         .get('/api/v1/categories')
@@ -249,6 +249,24 @@ describe('Error flows (e2e)', () => {
         expect.arrayContaining([
           expect.objectContaining({ id: categoryId, name: 'Danh mục của B' }),
         ]),
+      );
+    });
+
+    it('A xóa category của B nhận 404; category của B giữ nguyên', async () => {
+      const categoryId = await createCategory(tokenB);
+      const path = `/api/v1/categories/${categoryId}`;
+      const denied = await request(app.getHttpServer())
+        .delete(path)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .expect(404);
+      expectError(denied.body, 404, 'CATEGORY_NOT_FOUND', path);
+
+      const owned = await request(app.getHttpServer())
+        .get('/api/v1/categories')
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(200);
+      expect(owned.body.data).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: categoryId })]),
       );
     });
 

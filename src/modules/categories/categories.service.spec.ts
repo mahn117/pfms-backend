@@ -123,18 +123,20 @@ describe('CategoriesService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('nên ném ForbiddenException khi sửa category của user khác', async () => {
-      prisma.category.findFirst.mockResolvedValue({
-        id: 'cat-1',
-        userId: 'user-2',
-        isSystem: false,
-        type: 'EXPENSE',
-        deletedAt: null,
-      } as any);
+    it('nên ném NotFoundException khi sửa category của user khác', async () => {
+      prisma.category.findFirst.mockResolvedValue(null);
 
       await expect(
         service.update('user-1', 'cat-1', { name: 'Thử sửa' } as any),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.category.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'cat-1',
+          deletedAt: null,
+          OR: [{ userId: 'user-1' }, { isSystem: true }],
+        },
+      });
     });
 
     it('nên ném NotFoundException khi category không tồn tại', async () => {
@@ -312,6 +314,45 @@ describe('CategoriesService', () => {
   });
 
   describe('remove', () => {
+    it('nên ném NotFoundException khi xóa category của user khác', async () => {
+      prisma.category.findFirst.mockResolvedValue(null);
+
+      await expect(service.remove('user-1', 'cat-user-2')).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(prisma.category.count).not.toHaveBeenCalled();
+      expect(prisma.category.update).not.toHaveBeenCalled();
+    });
+
+    it('nên ném NotFoundException khi xóa category không tồn tại', async () => {
+      prisma.category.findFirst.mockResolvedValue(null);
+
+      await expect(service.remove('user-1', 'not-exist')).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(prisma.category.count).not.toHaveBeenCalled();
+      expect(prisma.category.update).not.toHaveBeenCalled();
+    });
+
+    it('nên ném ForbiddenException khi xóa category hệ thống', async () => {
+      prisma.category.findFirst.mockResolvedValue({
+        id: 'sys-1',
+        userId: null,
+        isSystem: true,
+        type: 'EXPENSE',
+        deletedAt: null,
+      } as any);
+
+      await expect(service.remove('user-1', 'sys-1')).rejects.toThrow(
+        ForbiddenException,
+      );
+
+      expect(prisma.category.count).not.toHaveBeenCalled();
+      expect(prisma.category.update).not.toHaveBeenCalled();
+    });
+
     it('nên soft-delete thành công khi category không còn con', async () => {
       prisma.category.findFirst.mockResolvedValue({
         id: 'cat-1',
