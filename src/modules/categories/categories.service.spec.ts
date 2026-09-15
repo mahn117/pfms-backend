@@ -282,7 +282,12 @@ describe('CategoriesService', () => {
 
       expect(prisma.category.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'cat-1' },
+          where: {
+            id: 'cat-1',
+            userId: 'user-1',
+            isSystem: false,
+            deletedAt: null,
+          },
           data: expect.objectContaining({ name: 'Tên mới' }),
         }),
       );
@@ -367,7 +372,12 @@ describe('CategoriesService', () => {
       const result = await service.remove('user-1', 'cat-1');
 
       expect(prisma.category.update).toHaveBeenCalledWith({
-        where: { id: 'cat-1' },
+        where: {
+          id: 'cat-1',
+          userId: 'user-1',
+          isSystem: false,
+          deletedAt: null,
+        },
         data: { deletedAt: expect.any(Date) },
       });
       expect(result).toEqual({ message: 'Xóa danh mục thành công' });

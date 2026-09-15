@@ -38,7 +38,7 @@ export class WalletsService {
     await this.findOwnedOrThrow(userId, id);
 
     return this.prisma.wallet.update({
-      where: { id },
+      where: { id, userId, deletedAt: null },
       data: {
         name: dto.name,
         type: dto.type,
@@ -51,7 +51,7 @@ export class WalletsService {
     await this.findOwnedOrThrow(userId, id);
 
     await this.prisma.wallet.update({
-      where: { id },
+      where: { id, userId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
 
@@ -143,7 +143,7 @@ export class WalletsService {
         },
       }),
       this.prisma.wallet.update({
-        where: { id: wallet.id },
+        where: { id: wallet.id, userId, deletedAt: null },
         data: { currentBalance: dto.actualBalance },
       }),
     ]);

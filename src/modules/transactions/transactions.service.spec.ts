@@ -50,7 +50,7 @@ describe('TransactionsService', () => {
       });
 
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1', deletedAt: null },
         data: { currentBalance: { increment: -50000 } },
       });
     });
@@ -76,7 +76,7 @@ describe('TransactionsService', () => {
       });
 
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1', deletedAt: null },
         data: { currentBalance: { increment: 200000 } },
       });
     });
@@ -112,11 +112,11 @@ describe('TransactionsService', () => {
       });
 
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1', deletedAt: null },
         data: { currentBalance: { decrement: 100000 } },
       });
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-2' },
+        where: { id: 'wallet-2', userId: 'user-1', deletedAt: null },
         data: { currentBalance: { increment: 100000 } },
       });
     });
@@ -166,8 +166,12 @@ describe('TransactionsService', () => {
 
       await service.remove('user-1', 'tx-1');
 
+      expect(prisma.transaction.update).toHaveBeenCalledWith({
+        where: { id: 'tx-1', userId: 'user-1', deletedAt: null },
+        data: { deletedAt: expect.any(Date) },
+      });
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1' },
         data: { currentBalance: { increment: 30000 } },
       });
     });
@@ -200,7 +204,7 @@ describe('TransactionsService', () => {
       const result = await service.addAttachment('user-1', 'tx-1', mockFile);
 
       expect(prisma.transaction.update).toHaveBeenCalledWith({
-        where: { id: 'tx-1' },
+        where: { id: 'tx-1', userId: 'user-1', deletedAt: null },
         data: { attachmentUrl: expect.stringMatching(/^\/uploads\/.+\.jpg$/) },
       });
       expect(result.attachmentUrl).toBe('/uploads/abc.jpg');
@@ -253,9 +257,18 @@ describe('TransactionsService', () => {
 
       await service.update('user-1', 'tx-1', { amount: 80000 });
 
+      expect(prisma.transaction.update).toHaveBeenCalledWith({
+        where: { id: 'tx-1', userId: 'user-1', deletedAt: null },
+        data: {
+          amount: 80000,
+          categoryId: undefined,
+          date: undefined,
+          note: undefined,
+        },
+      });
       // oldDelta = -50000, newDelta = -80000 => diff = -30000
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1' },
         data: { currentBalance: { increment: -30000 } },
       });
     });
@@ -275,7 +288,7 @@ describe('TransactionsService', () => {
 
       // oldDelta = 200000, newDelta = 150000 => diff = -50000
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1' },
         data: { currentBalance: { increment: -50000 } },
       });
     });
@@ -343,12 +356,16 @@ describe('TransactionsService', () => {
 
       const result = await service.remove('user-1', 'tx-1');
 
+      expect(prisma.transaction.update).toHaveBeenCalledWith({
+        where: { id: 'tx-1', userId: 'user-1', deletedAt: null },
+        data: { deletedAt: expect.any(Date) },
+      });
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1' },
         data: { currentBalance: { increment: 100000 } },
       });
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-2' },
+        where: { id: 'wallet-2', userId: 'user-1' },
         data: { currentBalance: { decrement: 100000 } },
       });
       expect(result).toEqual({ message: 'Xóa giao dịch thành công' });

@@ -50,7 +50,7 @@ export class GoalsService {
     }
 
     return this.prisma.goal.update({
-      where: { id },
+      where: { id, userId },
       data: {
         name: dto.name,
         targetAmount: dto.targetAmount,
@@ -62,7 +62,7 @@ export class GoalsService {
   async remove(userId: string, id: string) {
     await this.findOwnedOrThrow(userId, id);
 
-    await this.prisma.goal.delete({ where: { id } });
+    await this.prisma.goal.delete({ where: { id, userId } });
 
     return { message: 'Xóa mục tiêu thành công' };
   }
@@ -81,7 +81,7 @@ export class GoalsService {
     const isCompleted = newCurrentAmount >= Number(existing.targetAmount);
 
     return this.prisma.goal.update({
-      where: { id },
+      where: { id, userId },
       data: {
         currentAmount: { increment: dto.amount },
         status: isCompleted ? GoalStatus.COMPLETED : undefined,

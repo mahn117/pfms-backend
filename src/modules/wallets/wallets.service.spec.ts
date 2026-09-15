@@ -91,7 +91,7 @@ describe('WalletsService', () => {
       await service.remove('user-1', 'wallet-1');
 
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1', deletedAt: null },
         data: { deletedAt: expect.any(Date) },
       });
     });
@@ -198,7 +198,7 @@ describe('WalletsService', () => {
         }),
       );
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1', deletedAt: null },
         data: { currentBalance: 1100000 },
       });
       expect(result).toEqual(
@@ -270,7 +270,7 @@ describe('WalletsService', () => {
       });
 
       expect(prisma.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'wallet-1' },
+        where: { id: 'wallet-1', userId: 'user-1', deletedAt: null },
         data: expect.objectContaining({
           name: 'Ví đổi tên',
           isArchived: true,

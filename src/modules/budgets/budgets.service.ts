@@ -78,7 +78,7 @@ export class BudgetsService {
       );
     }
     return this.prisma.budget.update({
-      where: { id },
+      where: { id, userId },
       data: {
         categoryId: dto.categoryId,
         limitAmount: dto.limitAmount,
@@ -89,7 +89,7 @@ export class BudgetsService {
   async remove(userId: string, id: string) {
     await this.findOwnedOrThrow(userId, id);
 
-    await this.prisma.budget.delete({ where: { id } });
+    await this.prisma.budget.delete({ where: { id, userId } });
 
     return { message: 'Xóa ngân sách thành công' };
   }
