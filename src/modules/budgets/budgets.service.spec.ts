@@ -205,7 +205,7 @@ describe('BudgetsService', () => {
       });
 
       expect(prisma.budget.update).toHaveBeenCalledWith({
-        where: { id: 'budget-1' },
+        where: { id: 'budget-1', userId: 'user-1' },
         data: { categoryId: 'cat-2', limitAmount: 1500000 },
       });
     });
@@ -252,7 +252,7 @@ describe('BudgetsService', () => {
 
       expect(prisma.budget.findFirst).toHaveBeenCalledTimes(1);
       expect(prisma.budget.update).toHaveBeenCalledWith({
-        where: { id: 'budget-1' },
+        where: { id: 'budget-1', userId: 'user-1' },
         data: { categoryId: undefined, limitAmount: 2000000 },
       });
     });
@@ -280,7 +280,7 @@ describe('BudgetsService', () => {
       await service.remove('user-1', 'budget-1');
 
       expect(prisma.budget.delete).toHaveBeenCalledWith({
-        where: { id: 'budget-1' },
+        where: { id: 'budget-1', userId: 'user-1' },
       });
     });
   });

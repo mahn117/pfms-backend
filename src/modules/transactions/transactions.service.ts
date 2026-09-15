@@ -37,7 +37,7 @@ export class TransactionsService {
         },
       }),
       this.prisma.wallet.update({
-        where: { id: wallet.id },
+        where: { id: wallet.id, userId, deletedAt: null },
         data: { currentBalance: { increment: delta } },
       }),
     ]);
@@ -58,7 +58,7 @@ export class TransactionsService {
     const diff = newDelta - oldDelta;
 
     const updateTransactionQuery = this.prisma.transaction.update({
-      where: { id },
+      where: { id, userId, deletedAt: null },
       data: {
         amount: dto.amount,
         categoryId: dto.categoryId,
@@ -74,7 +74,7 @@ export class TransactionsService {
     const [updated] = await this.prisma.$transaction([
       updateTransactionQuery,
       this.prisma.wallet.update({
-        where: { id: existing.walletId },
+        where: { id: existing.walletId, userId },
         data: { currentBalance: { increment: diff } },
       }),
     ]);
@@ -88,15 +88,15 @@ export class TransactionsService {
     if (existing.type === TransactionType.TRANSFER) {
       await this.prisma.$transaction([
         this.prisma.transaction.update({
-          where: { id },
+          where: { id, userId, deletedAt: null },
           data: { deletedAt: new Date() },
         }),
         this.prisma.wallet.update({
-          where: { id: existing.walletId },
+          where: { id: existing.walletId, userId },
           data: { currentBalance: { increment: Number(existing.amount) } },
         }),
         this.prisma.wallet.update({
-          where: { id: existing.toWalletId! },
+          where: { id: existing.toWalletId!, userId },
           data: { currentBalance: { decrement: Number(existing.amount) } },
         }),
       ]);
@@ -110,11 +110,11 @@ export class TransactionsService {
 
     await this.prisma.$transaction([
       this.prisma.transaction.update({
-        where: { id },
+        where: { id, userId, deletedAt: null },
         data: { deletedAt: new Date() },
       }),
       this.prisma.wallet.update({
-        where: { id: existing.walletId },
+        where: { id: existing.walletId, userId },
         data: { currentBalance: { increment: reverseDelta } },
       }),
     ]);
@@ -148,11 +148,11 @@ export class TransactionsService {
         },
       }),
       this.prisma.wallet.update({
-        where: { id: fromWallet.id },
+        where: { id: fromWallet.id, userId, deletedAt: null },
         data: { currentBalance: { decrement: dto.amount } },
       }),
       this.prisma.wallet.update({
-        where: { id: toWallet.id },
+        where: { id: toWallet.id, userId, deletedAt: null },
         data: { currentBalance: { increment: dto.amount } },
       }),
     ]);
@@ -226,7 +226,7 @@ export class TransactionsService {
     await fs.writeFile(join(this.uploadDir, filename), file.buffer);
 
     return this.prisma.transaction.update({
-      where: { id },
+      where: { id, userId, deletedAt: null },
       data: { attachmentUrl: `/uploads/${filename}` },
     });
   }

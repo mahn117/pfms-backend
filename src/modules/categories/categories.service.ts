@@ -78,7 +78,7 @@ export class CategoriesService {
     }
 
     return this.prisma.category.update({
-      where: { id },
+      where: { id, userId, isSystem: false, deletedAt: null },
       data: {
         name: dto.name,
         icon: dto.icon,
@@ -102,7 +102,7 @@ export class CategoriesService {
     }
 
     await this.prisma.category.update({
-      where: { id },
+      where: { id, userId, isSystem: false, deletedAt: null },
       data: { deletedAt: new Date() },
     });
     return { message: 'Xóa danh mục thành công' };

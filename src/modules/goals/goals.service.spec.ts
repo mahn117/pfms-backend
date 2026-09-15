@@ -32,7 +32,7 @@ describe('GoalsService', () => {
       await service.contribute('user-1', 'goal-1', { amount: 300000 });
 
       expect(prisma.goal.update).toHaveBeenCalledWith({
-        where: { id: 'goal-1' },
+        where: { id: 'goal-1', userId: 'user-1' },
         data: {
           currentAmount: { increment: 300000 },
           status: undefined,
@@ -53,7 +53,7 @@ describe('GoalsService', () => {
       await service.contribute('user-1', 'goal-1', { amount: 200000 });
 
       expect(prisma.goal.update).toHaveBeenCalledWith({
-        where: { id: 'goal-1' },
+        where: { id: 'goal-1', userId: 'user-1' },
         data: {
           currentAmount: { increment: 200000 },
           status: 'COMPLETED',
@@ -149,7 +149,7 @@ describe('GoalsService', () => {
       await service.update('user-1', 'goal-1', { targetAmount: 1500000 });
 
       expect(prisma.goal.update).toHaveBeenCalledWith({
-        where: { id: 'goal-1' },
+        where: { id: 'goal-1', userId: 'user-1' },
         data: {
           name: undefined,
           targetAmount: 1500000,
@@ -188,7 +188,7 @@ describe('GoalsService', () => {
       await service.remove('user-1', 'goal-1');
 
       expect(prisma.goal.delete).toHaveBeenCalledWith({
-        where: { id: 'goal-1' },
+        where: { id: 'goal-1', userId: 'user-1' },
       });
     });
   });
