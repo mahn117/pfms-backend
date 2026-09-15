@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { join } from 'path';
+import { randomUUID } from 'crypto';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
@@ -14,8 +15,12 @@ describe('Transactions - Attachment & Export (e2e)', () => {
   let walletId: string;
   let categoryId: string;
   let transactionId: string;
+  let foreignAccessToken: string;
+  let foreignTransactionId: string;
+  let deletedTransactionId: string;
 
   const testEmail = `e2e-attachment-${Date.now()}@pfms.local`;
+  const foreignTestEmail = `e2e-attachment-foreign-${Date.now()}@pfms.local`;
   const testPassword = 'Password123';
 
   beforeAll(async () => {
@@ -86,6 +91,61 @@ describe('Transactions - Attachment & Export (e2e)', () => {
       .expect(201);
 
     transactionId = transactionRes.body.data.id;
+
+    const foreignRegisterRes = await request(app.getHttpServer() as any)
+      .post('/api/v1/auth/register')
+      .send({
+        email: foreignTestEmail,
+        password: testPassword,
+        fullName: 'E2E Foreign Attachment Tester',
+      })
+      .expect(201);
+
+    foreignAccessToken = foreignRegisterRes.body.data.accessToken;
+
+    const foreignWalletRes = await request(app.getHttpServer() as any)
+      .post('/api/v1/wallets')
+      .set('Authorization', `Bearer ${foreignAccessToken}`)
+      .send({ name: 'Ví foreign', type: 'CASH', initialBalance: 0 })
+      .expect(201);
+
+    const foreignCategoryRes = await request(app.getHttpServer() as any)
+      .post('/api/v1/categories')
+      .set('Authorization', `Bearer ${foreignAccessToken}`)
+      .send({ name: 'Danh mục foreign', type: 'EXPENSE' })
+      .expect(201);
+
+    const foreignTransactionRes = await request(app.getHttpServer() as any)
+      .post('/api/v1/transactions')
+      .set('Authorization', `Bearer ${foreignAccessToken}`)
+      .send({
+        type: 'EXPENSE',
+        walletId: foreignWalletRes.body.data.id,
+        categoryId: foreignCategoryRes.body.data.id,
+        amount: 10000,
+        date: '2026-08-21',
+      })
+      .expect(201);
+
+    foreignTransactionId = foreignTransactionRes.body.data.id;
+
+    const deletedTransactionRes = await request(app.getHttpServer() as any)
+      .post('/api/v1/transactions')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        type: 'EXPENSE',
+        walletId,
+        categoryId,
+        amount: 10000,
+        date: '2026-08-22',
+      })
+      .expect(201);
+
+    deletedTransactionId = deletedTransactionRes.body.data.id;
+    await request(app.getHttpServer() as any)
+      .delete(`/api/v1/transactions/${deletedTransactionId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
   });
 
   afterAll(async () => {
@@ -113,6 +173,52 @@ describe('Transactions - Attachment & Export (e2e)', () => {
 
       expect(res.body.success).toBe(false);
       expect(res.body.errorCode).toBe('INVALID_FILE_TYPE');
+    });
+
+    it('nên trả 404 khi upload vào transaction của user khác', async () => {
+      const res = await request(app.getHttpServer() as any)
+        .post(`/api/v1/transactions/${foreignTransactionId}/attachment`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('file', join(__dirname, 'fixtures', 'valid-image.jpg'))
+        .expect(404);
+
+      expect(res.body.errorCode).toBe('TRANSACTION_NOT_FOUND');
+
+      const unchanged = await request(app.getHttpServer() as any)
+        .get(`/api/v1/transactions/${foreignTransactionId}`)
+        .set('Authorization', `Bearer ${foreignAccessToken}`)
+        .expect(200);
+      expect(unchanged.body.data.attachmentUrl).toBeNull();
+    });
+
+    it('nên trả 404 khi transaction không tồn tại', async () => {
+      const res = await request(app.getHttpServer() as any)
+        .post(`/api/v1/transactions/${randomUUID()}/attachment`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('file', join(__dirname, 'fixtures', 'valid-image.jpg'))
+        .expect(404);
+
+      expect(res.body.errorCode).toBe('TRANSACTION_NOT_FOUND');
+    });
+
+    it('nên trả 404 khi transaction đã bị soft-delete', async () => {
+      const res = await request(app.getHttpServer() as any)
+        .post(`/api/v1/transactions/${deletedTransactionId}/attachment`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('file', join(__dirname, 'fixtures', 'valid-image.jpg'))
+        .expect(404);
+
+      expect(res.body.errorCode).toBe('TRANSACTION_NOT_FOUND');
+    });
+
+    it('nên kiểm tra ownership trước fileFilter cho transaction của user khác', async () => {
+      const res = await request(app.getHttpServer() as any)
+        .post(`/api/v1/transactions/${foreignTransactionId}/attachment`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('file', join(__dirname, 'fixtures', 'invalid-file.txt'))
+        .expect(404);
+
+      expect(res.body.errorCode).toBe('TRANSACTION_NOT_FOUND');
     });
 
     it('nên trả về 401 nếu không có accessToken', async () => {
