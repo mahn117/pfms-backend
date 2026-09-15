@@ -110,7 +110,11 @@ export class CategoriesService {
 
   private async findEditableOrThrow(userId: string, id: string) {
     const category = await this.prisma.category.findFirst({
-      where: { id, deletedAt: null },
+      where: {
+        id,
+        deletedAt: null,
+        OR: [{ userId }, { isSystem: true }],
+      },
     });
 
     if (!category) {
@@ -124,13 +128,6 @@ export class CategoriesService {
       throw new ForbiddenException({
         errorCode: ErrorCode.FORBIDDEN,
         message: 'Không thể sửa/xóa danh mục hệ thống',
-      });
-    }
-
-    if (category.userId !== userId) {
-      throw new ForbiddenException({
-        errorCode: ErrorCode.FORBIDDEN,
-        message: 'Bạn không có quyền với danh mục này',
       });
     }
 
