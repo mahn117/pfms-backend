@@ -140,8 +140,6 @@ export class AuthService {
       this.OTP_TTL_SECONDS,
     );
 
-    console.log(`[DEV-ONLY] OTP đặt lại mật khẩu cho ${user.email}: ${otp}`); //Tạm log console
-
     return { message: 'Nếu email tồn tại, OTP đã được gửi' };
   }
 
