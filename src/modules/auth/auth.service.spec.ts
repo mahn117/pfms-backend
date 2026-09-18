@@ -7,12 +7,14 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
+import { OtpDeliveryService } from '../notifications/otp-delivery.service';
 
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: DeepMockProxy<PrismaService>;
   let jwtService: JwtService;
   let redisService: { set: jest.Mock; get: jest.Mock; del: jest.Mock };
+  let otpDeliveryService: { sendPasswordResetOtp: jest.Mock };
 
   const configValues: Record<string, string> = {
     JWT_ACCESS_SECRET: 'access-secret',
@@ -46,12 +48,17 @@ describe('AuthService', () => {
           provide: RedisService,
           useValue: { set: jest.fn(), get: jest.fn(), del: jest.fn() },
         },
+        {
+          provide: OtpDeliveryService,
+          useValue: { sendPasswordResetOtp: jest.fn() },
+        },
       ],
     }).compile();
 
     service = module.get(AuthService);
     jwtService = module.get(JwtService);
     redisService = module.get(RedisService);
+    otpDeliveryService = module.get(OtpDeliveryService);
   });
 
   describe('register', () => {
@@ -171,9 +178,10 @@ describe('AuthService', () => {
 
       expect(result).toEqual({ message: 'Nếu email tồn tại, OTP đã được gửi' });
       expect(redisService.set).not.toHaveBeenCalled();
+      expect(otpDeliveryService.sendPasswordResetOtp).not.toHaveBeenCalled();
     });
 
-    it('nên sinh OTP, hash và lưu vào Redis với đúng key + TTL khi email tồn tại', async () => {
+    it('nên lưu hash với TTL 300 và gửi OTP đúng một lần khi email tồn tại', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'user-1',
         email: 'a@b.com',
@@ -186,7 +194,68 @@ describe('AuthService', () => {
         expect.any(String),
         300, // 5 * 60
       );
+      expect(otpDeliveryService.sendPasswordResetOtp).toHaveBeenCalledTimes(1);
+      expect(otpDeliveryService.sendPasswordResetOtp).toHaveBeenCalledWith({
+        email: 'a@b.com',
+        otp: expect.stringMatching(/^\d{6}$/),
+        expiresInSeconds: 300,
+      });
+
+      const storedHash = redisService.set.mock.calls[0][1] as string;
+      const deliveredOtp = otpDeliveryService.sendPasswordResetOtp.mock
+        .calls[0][0].otp as string;
+      expect(storedHash).not.toBe(deliveredOtp);
+      await expect(bcrypt.compare(deliveredOtp, storedHash)).resolves.toBe(
+        true,
+      );
       expect(result).toEqual({ message: 'Nếu email tồn tại, OTP đã được gửi' });
+    });
+
+    it('nên xoá OTP best-effort và vẫn trả message chung khi delivery thất bại', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+      } as any);
+      otpDeliveryService.sendPasswordResetOtp.mockRejectedValue(
+        new Error('SMTP chứa chi tiết nội bộ'),
+      );
+
+      const result = await service.forgotPassword({ email: 'a@b.com' });
+
+      expect(redisService.del).toHaveBeenCalledWith(
+        'otp:reset-password:user-1',
+      );
+      expect(result).toEqual({ message: 'Nếu email tồn tại, OTP đã được gửi' });
+    });
+
+    it('nên vẫn trả message chung nếu cleanup Redis sau lỗi delivery thất bại', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+      } as any);
+      otpDeliveryService.sendPasswordResetOtp.mockRejectedValue(
+        new Error('delivery failed'),
+      );
+      redisService.del.mockRejectedValue(new Error('cleanup failed'));
+
+      await expect(
+        service.forgotPassword({ email: 'a@b.com' }),
+      ).resolves.toEqual({
+        message: 'Nếu email tồn tại, OTP đã được gửi',
+      });
+    });
+
+    it('không gọi delivery nếu Redis set thất bại', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+      } as any);
+      redisService.set.mockRejectedValue(new Error('Redis unavailable'));
+
+      await expect(
+        service.forgotPassword({ email: 'a@b.com' }),
+      ).rejects.toThrow('Redis unavailable');
+      expect(otpDeliveryService.sendPasswordResetOtp).not.toHaveBeenCalled();
     });
   });
 

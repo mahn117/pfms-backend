@@ -19,6 +19,12 @@ jobs:
       JWT_REFRESH_SECRET: ci-only-refresh-secret
       JWT_ACCESS_EXPIRES: 15m
       JWT_REFRESH_EXPIRES: 7d
+      OTP_DELIVERY_PROVIDER: smtp
+      MAIL_HOST: smtp.invalid
+      MAIL_PORT: '587'
+      MAIL_FROM: no-reply@example.com
+      MAIL_SECURE: 'false'
+      MAIL_CONNECTION_TIMEOUT_MS: '10000'
       UPLOAD_STORAGE: local
       UPLOAD_MAX_SIZE_MB: '5'
     services:

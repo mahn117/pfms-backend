@@ -148,15 +148,21 @@ Lệnh này không xóa named volume. Không dùng tùy chọn `--volumes` nếu
 | `JWT_ACCESS_EXPIRES`   | Không                 | `15m`                                                      | Thời hạn access token.                                                                                              |
 | `JWT_REFRESH_SECRET`   | Có                    | `change-me-too`                                            | Secret ký refresh token; phải khác access secret.                                                                   |
 | `JWT_REFRESH_EXPIRES`  | Không                 | `7d`                                                       | Thời hạn refresh token.                                                                                             |
-| `MAIL_HOST`            | Không                 | Trống                                                      | Được config validation chấp nhận nhưng hiện chưa có mail provider thực tế.                                          |
-| `MAIL_PORT`            | Không                 | Trống                                                      | Dự phòng cho mail provider; hiện chưa có consumer.                                                                  |
-| `MAIL_USER`            | Không                 | Trống                                                      | Dự phòng cho mail provider; hiện chưa có consumer.                                                                  |
-| `MAIL_PASSWORD`        | Không                 | Trống                                                      | Dự phòng cho mail provider; hiện chưa có consumer.                                                                  |
+| `OTP_DELIVERY_PROVIDER` | Có                    | `smtp`                                                     | Provider gửi OTP; hiện chỉ hỗ trợ SMTP.                                                                             |
+| `MAIL_HOST`             | Có                    | —                                                          | Host của SMTP relay.                                                                                                |
+| `MAIL_PORT`             | Có                    | `587`                                                      | Port SMTP; thường dùng 587 với STARTTLS hoặc 465 với TLS trực tiếp.                                                 |
+| `MAIL_USER`             | Theo SMTP provider    | Trống                                                      | Username SMTP. Phải cấu hình cùng `MAIL_PASSWORD` nếu relay yêu cầu authentication.                                 |
+| `MAIL_PASSWORD`         | Theo SMTP provider    | Trống                                                      | Password SMTP. Không được commit hoặc ghi ra log.                                                                   |
+| `MAIL_FROM`             | Có                    | `PFMS <no-reply@example.com>`                              | Sender đã được SMTP provider cho phép.                                                                              |
+| `MAIL_SECURE`           | Không                 | `false`                                                    | Bật TLS trực tiếp; thường đặt `true` khi dùng port 465.                                                             |
+| `MAIL_CONNECTION_TIMEOUT_MS` | Không           | `10000`                                                    | Timeout kết nối, greeting và socket SMTP tính bằng mili giây.                                                       |
 | `SMS_PROVIDER_API_KEY` | Không                 | Trống                                                      | Dự phòng cho SMS provider; hiện chưa có consumer.                                                                   |
 | `UPLOAD_STORAGE`       | Không                 | `local`                                                    | Validation chấp nhận `local` hoặc `s3`, nhưng implementation hiện chỉ lưu local.                                    |
 | `UPLOAD_MAX_SIZE_MB`   | Không                 | `5`                                                        | Dung lượng tối đa của file đính kèm, tính theo MB.                                                                  |
 
-Luồng quên mật khẩu hiện lưu hash OTP trong Redis với TTL 5 phút và không ghi plaintext OTP ra console; hệ thống chưa tích hợp email/SMS provider thực tế.
+Luồng quên mật khẩu lưu hash OTP trong Redis với TTL 5 phút rồi gửi plaintext OTP một lần qua SMTP. Ứng dụng không ghi OTP, email nhận hoặc SMTP credential ra log. Nếu SMTP thất bại, ứng dụng best-effort xoá OTP vừa lưu nhưng vẫn trả response chung để không tiết lộ account existence.
+
+Để gửi email production, cấu hình một SMTP relay và sender/domain đã được xác minh. Automated tests thay delivery service bằng fake và không kết nối SMTP thật.
 
 ## Prisma và database
 
@@ -286,18 +292,20 @@ Credential này công khai và chỉ dành cho local/demo. Mỗi lần chạy se
 ├── src/
 │   ├── common/              # Filter, guard, interceptor, logging, Swagger schema
 │   ├── config/              # Validation biến môi trường
-│   ├── modules/             # Các module nghiệp vụ
+│   ├── modules/             # Các module NestJS theo domain/chức năng
 │   │   ├── auth/
 │   │   ├── budgets/
 │   │   ├── categories/
 │   │   ├── goals/
 │   │   ├── health/
+│   │   ├── notifications/
 │   │   ├── reports/
 │   │   ├── transactions/
 │   │   ├── users/
 │   │   └── wallets/
 │   ├── prisma/              # Schema, migrations, seed và Prisma service
 │   ├── redis/               # Redis module và service
+│   ├── app.module.ts        # Composition root của ứng dụng
 │   └── main.ts              # Bootstrap NestJS và Swagger
 ├── test/                    # E2E suites, fixtures và Jest config
 ├── Dockerfile
@@ -351,7 +359,7 @@ Project hiện chưa có cấu hình image registry/pull, Kubernetes, managed da
 - Không commit `.env`, `.env.test` hoặc secret vào Git.
 - Không chạy seed demo trên production.
 - Local upload hiện nằm trong Docker named volume; chưa có object storage/S3 thực tế.
-- OTP quên mật khẩu được lưu dưới dạng hash trong Redis với TTL 5 phút và không được ghi plaintext ra console; hệ thống hiện chưa có email/SMS provider thực tế.
+- OTP quên mật khẩu được lưu dưới dạng hash trong Redis với TTL 5 phút, gửi qua SMTP và không được ghi plaintext ra console. Cần cấu hình SMTP relay cùng sender/domain production hợp lệ trước khi public hệ thống.
 - Project chưa cấu hình reverse proxy hoặc TLS/HTTPS.
 - Project chưa có CD tự động; GitHub Actions hiện chỉ thực hiện CI cho pull request vào `main`.
 - Cần tự thiết lập backup, giám sát, domain, TLS và chính sách vận hành phù hợp trước khi public hệ thống.
