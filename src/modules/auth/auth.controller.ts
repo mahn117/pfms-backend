@@ -6,7 +6,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   ApiErrors,
   ApiSuccess,
@@ -61,6 +61,11 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @ApiOperation({
+    summary: 'Gửi OTP đặt lại mật khẩu qua email',
+    description:
+      'Luôn trả response chung để không tiết lộ email có tồn tại hay không.',
+  })
   @ApiSuccess(200, responseSchemas.message)
   @ApiErrors(400, 429)
   @AuthRateLimit('forgot-password')

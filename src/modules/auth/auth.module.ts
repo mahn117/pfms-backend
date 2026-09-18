@@ -5,9 +5,10 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthRateLimitGuard } from './auth-rate-limit.guard';
+import { NotificationModule } from '../notifications/notification.module';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({})],
+  imports: [PassportModule, JwtModule.register({}), NotificationModule],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, AuthRateLimitGuard],
 })

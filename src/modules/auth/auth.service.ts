@@ -16,6 +16,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { createHash } from 'crypto';
+import { OtpDeliveryService } from '../notifications/otp-delivery.service';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +25,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
+    private readonly otpDeliveryService: OtpDeliveryService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -134,11 +136,22 @@ export class AuthService {
 
     const otp = this.generateOtp();
     const otpHash = await bcrypt.hash(otp, 10);
-    await this.redisService.set(
-      this.otpKey(user.id),
-      otpHash,
-      this.OTP_TTL_SECONDS,
-    );
+    const otpKey = this.otpKey(user.id);
+    await this.redisService.set(otpKey, otpHash, this.OTP_TTL_SECONDS);
+
+    try {
+      await this.otpDeliveryService.sendPasswordResetOtp({
+        email: dto.email,
+        otp,
+        expiresInSeconds: this.OTP_TTL_SECONDS,
+      });
+    } catch {
+      try {
+        await this.redisService.del(otpKey);
+      } catch {
+        // Best-effort cleanup. Do not expose delivery or Redis details.
+      }
+    }
 
     return { message: 'Nếu email tồn tại, OTP đã được gửi' };
   }
