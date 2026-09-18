@@ -123,6 +123,14 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
   },
+  "overrides": {
+    "@nestjs/platform-express": {
+      "multer": "^2.4.0"
+    },
+    "prisma": {
+      "mysql2": "3.23.1"
+    }
+  },
   "allowScripts": {
     "@prisma/engines@7.9.1": true,
     "prisma@7.9.1": true,
