@@ -9,7 +9,7 @@ Theo giả định thiết kế, mọi khoản tiền dùng chung một đơn v�
 - Node.js 24 và TypeScript
 - NestJS 11
 - Prisma 7 với PostgreSQL 16
-- Redis 7 cho OTP đặt lại mật khẩu
+- Redis 7 cho OTP đặt lại mật khẩu và rate limit auth
 - JWT access token và refresh token
 - Jest cho unit test, E2E test và coverage
 - Swagger/OpenAPI
@@ -37,6 +37,8 @@ Có thể dùng PostgreSQL và Redis đã cài trên máy, hoặc khởi động
 Clone repository, chuyển vào thư mục project rồi cài dependency theo lockfile:
 
 ```bash
+git clone https://github.com/mahn117/pfms-backend.git
+cd pfms-backend
 npm ci
 ```
 
@@ -52,7 +54,7 @@ Trên PowerShell:
 Copy-Item .env.example .env
 ```
 
-Giá trị `DATABASE_URL` và `REDIS_URL` mẫu dùng `localhost`, phù hợp khi NestJS chạy trên host. Nếu dùng Mailpit trong Docker nhưng chạy API trực tiếp trên host (kể cả Windows), đặt `MAIL_HOST=127.0.0.1` và giữ `MAIL_PORT=1025` trong `.env`. Tên `mailpit` chỉ phân giải trong mạng Docker Compose. Thay các giá trị cần thiết trong `.env` trước khi tiếp tục.
+Khi API chạy trực tiếp trên host, `DATABASE_URL` và `REDIS_URL` dùng `localhost` như mẫu. Nếu PostgreSQL/Redis được publish ở cổng khác, sửa URL theo `POSTGRES_HOST_PORT`/`REDIS_HOST_PORT`. Đặt `MAIL_HOST=127.0.0.1` và giữ `MAIL_PORT=1025` khi Mailpit chạy trong Docker, kể cả API chạy trên Windows; tên `mailpit` chỉ phân giải trong mạng Compose. Nếu đổi `POSTGRES_USER`, `POSTGRES_PASSWORD` hoặc `POSTGRES_DB`, cập nhật `DATABASE_URL` trong `.env` cho cùng database trước khi chạy Prisma CLI/seed trên host.
 
 Nếu chưa có PostgreSQL và Redis trên máy, khởi động chúng cùng Mailpit bằng Compose:
 
@@ -93,7 +95,7 @@ Tạo `.env` nếu chưa có:
 cp .env.example .env
 ```
 
-Giữ `COMPOSE_PROFILES=demo`, `MAIL_HOST=mailpit` và `MAIL_PORT=1025` từ `.env.example` để Compose chạy Mailpit và API container gửi OTP tới đó. Đổi password PostgreSQL và JWT secrets trong `.env`, sau đó build và chạy API, PostgreSQL, Redis và Mailpit:
+Để chạy demo, giữ `COMPOSE_PROFILES=demo`, `MAIL_HOST=mailpit` và `MAIL_PORT=1025` từ `.env.example`. Đổi JWT secrets trước khi chia sẻ môi trường; nếu đổi `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`, đồng bộ `DATABASE_URL` để Prisma CLI và seed chạy trên host dùng đúng thông tin. Compose tự tạo URL PostgreSQL và Redis riêng cho API container. Sau đó build và chạy API, PostgreSQL, Redis và Mailpit:
 
 ```bash
 docker compose up -d --build
@@ -108,9 +110,15 @@ docker compose logs -f api
 
 API container chờ PostgreSQL và Redis healthy; Mailpit chạy cùng Compose ở profile `demo`. Sau đó entrypoint tự chạy `prisma migrate deploy` trước khi khởi động `node dist/main.js`.
 
-Port API trên host lấy từ `API_HOST_PORT`, mặc định là `3000`. PostgreSQL, Redis và hai cổng Mailpit chỉ được publish trên `127.0.0.1` của host. Dữ liệu PostgreSQL và file upload được lưu trong các named volume `pgdata` và `uploads`.
+Port API trên host lấy từ `API_HOST_PORT`, mặc định là `3000`. PostgreSQL, Redis và hai cổng Mailpit chỉ được publish trên `127.0.0.1` của host. Kiểm tra API và phụ thuộc tại `http://localhost:3000/api/v1/health` (đổi port nếu dùng `API_HOST_PORT` khác). Dữ liệu PostgreSQL và file upload nằm trong named volume `pgdata` và `uploads`.
 
-Mailpit chỉ dùng cho local/demo. Mở [http://localhost:8025](http://localhost:8025) để xem email thử nghiệm. Để thử đặt lại mật khẩu: tạo tài khoản hoặc dùng tài khoản seed, gọi `POST /api/v1/auth/forgot-password` với email tài khoản, mở email trong Mailpit lấy OTP, gọi `POST /api/v1/auth/reset-password` với OTP và mật khẩu mới, rồi đăng nhập lại qua `POST /api/v1/auth/login`. Dùng Swagger UI tại [http://localhost:3000/api/docs](http://localhost:3000/api/docs) để xem body cụ thể của từng request.
+Mailpit chỉ dùng cho local/demo. Mở [http://localhost:8025](http://localhost:8025) để xem email thử nghiệm. Dùng [Swagger UI](http://localhost:3000/api/docs) để thử luồng quên mật khẩu:
+
+1. Tạo tài khoản hoặc chạy seed để có tài khoản demo.
+2. Gọi `POST /api/v1/auth/forgot-password` với `{"email":"test.user@pfms.local"}` (hoặc email đã đăng ký). Response luôn là thông báo chung.
+3. Mở Mailpit UI, lấy OTP 6 chữ số trong email mới nhất gửi tới địa chỉ đó.
+4. Gọi `POST /api/v1/auth/reset-password` với `email`, `otp` và `newPassword` dài ít nhất 8 ký tự.
+5. Gọi `POST /api/v1/auth/login` bằng mật khẩu mới. Seed chạy lại sẽ đặt lại mật khẩu của tài khoản demo.
 
 Seed không tự chạy khi container khởi động và production image hiện không chứa seed runner. Nếu cần tài khoản/data demo, hãy cài dependency trên host rồi chạy:
 
@@ -156,7 +164,7 @@ Lệnh này không xóa named volume. Không dùng tùy chọn `--volumes` nếu
 | `MAIL_PORT`             | Có                    | `1025`                                                     | Port Mailpit local/demo; production dùng port do SMTP provider cung cấp.                                             |
 | `MAIL_USER`             | Theo SMTP provider    | Trống                                                      | Username SMTP. Phải cấu hình cùng `MAIL_PASSWORD` nếu relay yêu cầu authentication.                                 |
 | `MAIL_PASSWORD`         | Theo SMTP provider    | Trống                                                      | Password SMTP. Không được commit hoặc ghi ra log.                                                                   |
-| `MAIL_FROM`             | Có                    | `PFMS <no-reply@example.com>`                              | Sender đã được SMTP provider cho phép.                                                                              |
+| `MAIL_FROM`             | Có                    | `PFMS <no-reply@example.com>`                              | Sender demo; production phải dùng sender/domain đã được SMTP provider xác minh.                                     |
 | `MAIL_SECURE`           | Không                 | `false`                                                    | Bật TLS trực tiếp; thường đặt `true` khi dùng port 465.                                                             |
 | `MAIL_CONNECTION_TIMEOUT_MS` | Không           | `10000`                                                    | Timeout kết nối, greeting và socket SMTP tính bằng mili giây.                                                       |
 | `SMS_PROVIDER_API_KEY` | Không                 | Trống                                                      | Dự phòng cho SMS provider; hiện chưa có consumer.                                                                   |
@@ -203,6 +211,25 @@ Seed được cấu hình trong `prisma.config.ts`. Seed có thể chạy lại 
 
 ## Lint, test và build
 
+### Chuẩn bị database test trên máy local
+
+Các lệnh `test:e2e` và `test:cov` dùng PostgreSQL/Redis thật và đọc `.env.test`; file này không được commit. Nếu trước đó chỉ chạy ứng dụng bằng Docker, cần cài Node.js 24 trên host, chạy `npm ci` và `npx prisma generate` trước khi chạy test.
+
+1. Khởi động PostgreSQL và Redis (nếu chưa chạy): `docker compose up -d postgres redis`.
+2. Tạo database test một lần với user từ cấu hình Compose:
+
+   ```bash
+   docker compose exec postgres sh -c 'createdb -U "$POSTGRES_USER" pfms_test'
+   ```
+
+   Nếu database `pfms_test` đã tồn tại, bỏ qua bước này. Nếu dùng PostgreSQL cài trên host, tạo database cùng tên bằng công cụ PostgreSQL của bạn.
+3. Sao chép `.env.example` thành `.env.test` (PowerShell dùng `Copy-Item .env.example .env.test`). Đặt `NODE_ENV=test`, `DATABASE_URL` trỏ đến `pfms_test` trên host với đúng user/password/port PostgreSQL của bạn, và `REDIS_URL=redis://127.0.0.1:6379/1` (đổi port nếu cần). `MAIL_HOST=127.0.0.1` là giá trị phù hợp nếu API test chạy trên host; automated tests dùng fake delivery service nên không gửi SMTP thật.
+4. Áp dụng migration vào database test:
+
+   ```bash
+   npx dotenv -e .env.test -- prisma migrate deploy
+   ```
+
 Kiểm tra lint mà không tự sửa file:
 
 ```bash
@@ -239,7 +266,7 @@ Build production:
 npm run build
 ```
 
-Khi chạy local, `test:e2e` và `test:cov` đọc `.env.test`, hiện được cấu hình dùng PostgreSQL database `pfms_test` và Redis database `/1`. File này không được commit. Trên GitHub Actions, workflow không dùng `.env.test` mà inject trực tiếp các biến môi trường test. Coverage hiện yêu cầu tối thiểu 80% cho lines và branches.
+Trên GitHub Actions, workflow inject trực tiếp các biến môi trường test thay cho `.env.test`. Coverage gate yêu cầu tối thiểu 80% cho lines và branches.
 
 ## Swagger và OpenAPI
 
@@ -247,6 +274,7 @@ Sau khi API khởi động với port mặc định:
 
 - Swagger UI: `http://localhost:3000/api/docs`
 - OpenAPI JSON: `http://localhost:3000/api/docs-json`
+- Health: `http://localhost:3000/api/v1/health` (kiểm tra PostgreSQL và Redis; trả HTTP 503 nếu phụ thuộc lỗi)
 
 Hai path Swagger đang được cấu hình trực tiếp và không thay đổi theo `API_PREFIX`. Khi chạy Docker với `API_HOST_PORT` khác `3000`, thay port trong URL tương ứng.
 
@@ -274,7 +302,7 @@ Tài khoản được tạo bởi `npx prisma db seed`:
 | ---------------------- | ------------ | ------ |
 | `test.user@pfms.local` | `Test@12345` | `USER` |
 
-Seed hiện tạo:
+Trên database mới, seed tạo:
 
 - 31 system category thu/chi, bao gồm category cha và category con.
 - Ví `Tiền mặt`: số dư đầu kỳ `1.000.000`, số dư sau giao dịch mẫu `2.800.000`.
@@ -291,7 +319,6 @@ Credential này công khai và chỉ dành cho local/demo. Mỗi lần chạy se
 .
 ├── .github/workflows/       # GitHub Actions CI
 ├── docker/                  # Entrypoint của API container
-├── docs/                    # Tài liệu thiết kế hệ thống
 ├── src/
 │   ├── common/              # Filter, guard, interceptor, logging, Swagger schema
 │   ├── config/              # Validation biến môi trường
@@ -337,13 +364,19 @@ Repository hiện chưa có workflow CD tự động.
 
 ## Deploy tối thiểu bằng Docker Compose
 
-Quy trình deploy hiện có là build image trực tiếp từ source trên máy đích:
+Compose build image trực tiếp từ source trên máy đích. Tạo `.env` từ file mẫu:
 
 ```bash
 cp .env.example .env
 ```
 
-Điền secret/password production trong `.env`, sau đó chạy:
+Trước khi chạy, sửa `.env` cho production:
+
+1. Bỏ profile demo bằng `COMPOSE_PROFILES=` để không khởi động Mailpit.
+2. Đặt `POSTGRES_PASSWORD` và hai JWT secret mạnh, khác nhau; đồng bộ `DATABASE_URL` với user/password/database/host port PostgreSQL nếu chạy Prisma CLI trên host. Với cấu hình Compose hiện tại, chọn mật khẩu PostgreSQL có thể dùng an toàn trong URL kết nối.
+3. Cấu hình `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASSWORD`, `MAIL_FROM` và `MAIL_SECURE` theo SMTP provider thật (ví dụ Brevo). User/password phải đi cùng nhau nếu relay cần auth; sender/domain phải được provider cho phép. Không dùng `mailpit`, port `1025` hoặc sender demo trong production.
+
+Sau đó chạy:
 
 ```bash
 docker compose up -d --build
@@ -351,9 +384,9 @@ docker compose ps
 docker compose logs -f api
 ```
 
-Khi API container khởi động, entrypoint tự áp dụng migration bằng `prisma migrate deploy`. Compose dùng named volume để giữ PostgreSQL data và file upload qua các lần recreate container.
+Khi API container khởi động, entrypoint tự áp dụng migration bằng `prisma migrate deploy`. Compose dùng named volume để giữ PostgreSQL data và file upload qua các lần recreate container. Nếu `pgdata` đã tồn tại, đổi `POSTGRES_PASSWORD` trong `.env` không tự đổi password trong PostgreSQL hiện có.
 
-Project hiện chưa có cấu hình image registry/pull, Kubernetes, managed database hoặc pipeline deploy. Do đó tài liệu này không giả định các quy trình đó tồn tại.
+Đây là cách chạy Compose tối thiểu; repository chưa có image registry, reverse proxy/TLS hoặc pipeline CD.
 
 ## Lưu ý production
 
