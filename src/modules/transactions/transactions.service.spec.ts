@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
 import { TransactionsService } from './transactions.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ErrorCode } from '../../common/constants/error-codes';
 
 jest.mock('fs', () => ({
   promises: {
@@ -183,6 +184,32 @@ describe('TransactionsService', () => {
         NotFoundException,
       );
     });
+
+    it.each([
+      [100, -100],
+      [-100, 100],
+    ])(
+      'DELETE ADJUSTMENT amount %i áp dụng delta %i',
+      async (amount, delta) => {
+        prisma.transaction.findFirst.mockResolvedValue({
+          id: 'tx-1',
+          userId: 'user-1',
+          walletId: 'wallet-1',
+          type: 'ADJUSTMENT',
+          amount,
+        } as any);
+        prisma.transaction.update.mockResolvedValue({} as any);
+        prisma.wallet.update.mockResolvedValue({} as any);
+
+        await service.remove('user-1', 'tx-1');
+
+        expect(prisma.wallet.update).toHaveBeenCalledWith({
+          where: { id: 'wallet-1', userId: 'user-1' },
+          data: { currentBalance: { increment: delta } },
+        });
+        expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Array));
+      },
+    );
   });
 
   describe('addAttachment', () => {
@@ -244,6 +271,86 @@ describe('TransactionsService', () => {
   });
 
   describe('update', () => {
+    it.each([
+      [100, 150, -50, 50],
+      [150, 100, 50, -50],
+    ])(
+      'PATCH TRANSFER %i -> %i cập nhật ví nguồn %i và ví đích %i',
+      async (oldAmount, newAmount, sourceDelta, destinationDelta) => {
+        prisma.transaction.findFirst.mockResolvedValue({
+          id: 'tx-1',
+          userId: 'user-1',
+          walletId: 'wallet-1',
+          toWalletId: 'wallet-2',
+          type: 'TRANSFER',
+          amount: oldAmount,
+        } as any);
+        prisma.transaction.update.mockResolvedValue({ id: 'tx-1' } as any);
+        prisma.wallet.update.mockResolvedValue({} as any);
+
+        await service.update('user-1', 'tx-1', { amount: newAmount });
+
+        expect(prisma.transaction.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ amount: newAmount }),
+          }),
+        );
+        expect(prisma.wallet.update).toHaveBeenCalledWith({
+          where: { id: 'wallet-1', userId: 'user-1' },
+          data: { currentBalance: { increment: sourceDelta } },
+        });
+        expect(prisma.wallet.update).toHaveBeenCalledWith({
+          where: { id: 'wallet-2', userId: 'user-1' },
+          data: { currentBalance: { increment: destinationDelta } },
+        });
+        expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Array));
+        expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(3);
+      },
+    );
+
+    it.each([{ note: 'test' }, { amount: 150 }])(
+      'từ chối PATCH ADJUSTMENT trước mọi mutation',
+      async (dto) => {
+        prisma.transaction.findFirst.mockResolvedValue({
+          id: 'tx-1',
+          userId: 'user-1',
+          walletId: 'wallet-1',
+          type: 'ADJUSTMENT',
+          amount: 100,
+        } as any);
+
+        await expect(
+          service.update('user-1', 'tx-1', dto),
+        ).rejects.toMatchObject({
+          status: 400,
+          response: {
+            errorCode: ErrorCode.ADJUSTMENT_NOT_EDITABLE,
+            message: 'Giao dịch đối soát không được chỉnh sửa trực tiếp',
+          },
+        });
+
+        expect(prisma.transaction.update).not.toHaveBeenCalled();
+        expect(prisma.wallet.update).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it('từ chối transaction type không được hỗ trợ', async () => {
+      prisma.transaction.findFirst.mockResolvedValue({
+        id: 'tx-1',
+        userId: 'user-1',
+        walletId: 'wallet-1',
+        type: 'UNKNOWN',
+        amount: 100,
+      } as any);
+
+      await expect(
+        service.update('user-1', 'tx-1', { amount: 150 }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.transaction.update).not.toHaveBeenCalled();
+      expect(prisma.wallet.update).not.toHaveBeenCalled();
+    });
+
     it('EXPENSE tăng amount nên trừ thêm đúng phần chênh lệch vào ví', async () => {
       prisma.transaction.findFirst.mockResolvedValue({
         id: 'tx-1',

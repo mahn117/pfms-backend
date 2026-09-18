@@ -1,8 +1,11 @@
 import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { TransactionType } from '@/generated/prisma/client';
 import { ErrorCode } from '../../common/constants/error-codes';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionsService } from './transactions.service';
+import { FindTransactionsDto } from './dto/find-transactions.dto';
 
 describe('TransactionsService - kiểm tra danh mục và bộ lọc', () => {
   let prisma: DeepMockProxy<PrismaService>;
@@ -65,6 +68,45 @@ describe('TransactionsService - kiểm tra danh mục và bộ lọc', () => {
     beforeEach(() => {
       prisma.transaction.findMany.mockResolvedValue([]);
       prisma.transaction.count.mockResolvedValue(0);
+    });
+
+    it.each([
+      { name: 'không nhập amount', params: {}, amount: undefined },
+      { name: 'minAmount=0', params: { minAmount: '0' }, amount: { gte: 0 } },
+      { name: 'minAmount rỗng', params: { minAmount: '' }, amount: undefined },
+      { name: 'maxAmount=0', params: { maxAmount: '0' }, amount: { lte: 0 } },
+      { name: 'maxAmount rỗng', params: { maxAmount: '' }, amount: undefined },
+      {
+        name: 'minAmount âm',
+        params: { minAmount: '-100' },
+        amount: { gte: -100 },
+      },
+    ])('parse $name và tạo amount where đúng', async ({ params, amount }) => {
+      const query = plainToInstance(FindTransactionsDto, params);
+      expect(validateSync(query)).toHaveLength(0);
+
+      await service.findAll('user-1', query);
+
+      const expectedWhere = {
+        userId: 'user-1',
+        deletedAt: null,
+        ...(amount ? { amount } : {}),
+      };
+      expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expectedWhere }),
+      );
+      expect(prisma.transaction.count).toHaveBeenCalledWith({
+        where: expectedWhere,
+      });
+    });
+
+    it('giữ validation lỗi cho amount không phải số', () => {
+      const query = plainToInstance(FindTransactionsDto, {
+        minAmount: 'không phải số',
+      });
+      expect(validateSync(query).map((error) => error.property)).toContain(
+        'minAmount',
+      );
     });
 
     it.each([

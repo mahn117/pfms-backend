@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsIn,
@@ -10,6 +10,11 @@ import {
   Min,
 } from 'class-validator';
 import { TransactionType } from '@/generated/prisma/client';
+
+const transformOptionalAmount = ({ value }: { value: unknown }) =>
+  value === undefined || (typeof value === 'string' && value.trim() === '')
+    ? undefined
+    : Number(value);
 
 export class FindTransactionsDto {
   @ApiPropertyOptional({
@@ -58,20 +63,22 @@ export class FindTransactionsDto {
   to?: string;
 
   @ApiPropertyOptional({
-    example: 0,
-    description: 'Lọc giao dịch có số tiền tối thiểu',
+    example: -100000,
+    description:
+      'Không bắt buộc; bỏ trống để không lọc. Ví dụ chỉ minh họa, không phải giá trị mặc định. So sánh với amount có dấu.',
   })
   @IsOptional()
-  @Type(() => Number)
+  @Transform(transformOptionalAmount)
   @IsNumber()
   minAmount?: number;
 
   @ApiPropertyOptional({
     example: 1000000,
-    description: 'Lọc giao dịch có số tiền tối đa',
+    description:
+      'Không bắt buộc; bỏ trống để không lọc. Ví dụ chỉ minh họa, không phải giá trị mặc định. So sánh với amount có dấu.',
   })
   @IsOptional()
-  @Type(() => Number)
+  @Transform(transformOptionalAmount)
   @IsNumber()
   maxAmount?: number;
 

@@ -48,6 +48,13 @@ export class TransactionsService {
   async update(userId: string, id: string, dto: UpdateTransactionDto) {
     const existing = await this.findOwnedOrThrow(userId, id);
 
+    if (existing.type === TransactionType.ADJUSTMENT) {
+      throw new BadRequestException({
+        errorCode: ErrorCode.ADJUSTMENT_NOT_EDITABLE,
+        message: 'Giao dịch đối soát không được chỉnh sửa trực tiếp',
+      });
+    }
+
     if (dto.categoryId) {
       await this.assertValidCategory(userId, dto.categoryId, existing.type);
     }
@@ -56,6 +63,7 @@ export class TransactionsService {
     const oldDelta = this.computeDelta(existing.type, Number(existing.amount));
     const newDelta = this.computeDelta(existing.type, newAmount);
     const diff = newDelta - oldDelta;
+    const amountDiff = newAmount - Number(existing.amount);
 
     const updateTransactionQuery = this.prisma.transaction.update({
       where: { id, userId, deletedAt: null },
@@ -71,12 +79,25 @@ export class TransactionsService {
       return updateTransactionQuery;
     }
 
-    const [updated] = await this.prisma.$transaction([
-      updateTransactionQuery,
+    const walletUpdates = [
       this.prisma.wallet.update({
         where: { id: existing.walletId, userId },
         data: { currentBalance: { increment: diff } },
       }),
+    ];
+
+    if (existing.type === TransactionType.TRANSFER) {
+      walletUpdates.push(
+        this.prisma.wallet.update({
+          where: { id: existing.toWalletId!, userId },
+          data: { currentBalance: { increment: amountDiff } },
+        }),
+      );
+    }
+
+    const [updated] = await this.prisma.$transaction([
+      updateTransactionQuery,
+      ...walletUpdates,
     ]);
 
     return updated;
@@ -250,7 +271,19 @@ export class TransactionsService {
   }
 
   private computeDelta(type: TransactionType, amount: number): number {
-    return type === TransactionType.INCOME ? amount : -amount;
+    switch (type) {
+      case TransactionType.INCOME:
+      case TransactionType.ADJUSTMENT:
+        return amount;
+      case TransactionType.EXPENSE:
+      case TransactionType.TRANSFER:
+        return -amount;
+      default:
+        throw new BadRequestException({
+          errorCode: ErrorCode.VALIDATION_ERROR,
+          message: 'Loại giao dịch không được hỗ trợ',
+        });
+    }
   }
 
   private async assertOwnedWallet(userId: string, walletId: string) {
