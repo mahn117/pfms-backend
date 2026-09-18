@@ -25,7 +25,7 @@ Theo giả định thiết kế, mọi khoản tiền dùng chung một đơn v�
 - PostgreSQL 16
 - Redis 7
 
-Có thể dùng PostgreSQL và Redis đã cài trên máy, hoặc khởi động riêng hai service này bằng Docker Compose.
+Có thể dùng PostgreSQL và Redis đã cài trên máy, hoặc khởi động các service này cùng Mailpit bằng Docker Compose.
 
 ### Chạy toàn bộ bằng container
 
@@ -52,12 +52,12 @@ Trên PowerShell:
 Copy-Item .env.example .env
 ```
 
-Giá trị `DATABASE_URL` và `REDIS_URL` mẫu dùng `localhost`, phù hợp khi NestJS chạy trên host. Thay các giá trị cần thiết trong `.env` trước khi tiếp tục.
+Giá trị `DATABASE_URL` và `REDIS_URL` mẫu dùng `localhost`, phù hợp khi NestJS chạy trên host. Nếu dùng Mailpit trong Docker nhưng chạy API trực tiếp trên host (kể cả Windows), đặt `MAIL_HOST=127.0.0.1` và giữ `MAIL_PORT=1025` trong `.env`. Tên `mailpit` chỉ phân giải trong mạng Docker Compose. Thay các giá trị cần thiết trong `.env` trước khi tiếp tục.
 
-Nếu chưa có PostgreSQL và Redis trên máy, khởi động hai service bằng Compose:
+Nếu chưa có PostgreSQL và Redis trên máy, khởi động chúng cùng Mailpit bằng Compose:
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres redis mailpit
 ```
 
 Generate Prisma Client, áp dụng migration đã commit và tạo dữ liệu demo:
@@ -93,7 +93,7 @@ Tạo `.env` nếu chưa có:
 cp .env.example .env
 ```
 
-Đổi password PostgreSQL và JWT secrets trong `.env`, sau đó build và chạy toàn bộ API, PostgreSQL và Redis:
+Giữ `COMPOSE_PROFILES=demo`, `MAIL_HOST=mailpit` và `MAIL_PORT=1025` từ `.env.example` để Compose chạy Mailpit và API container gửi OTP tới đó. Đổi password PostgreSQL và JWT secrets trong `.env`, sau đó build và chạy API, PostgreSQL, Redis và Mailpit:
 
 ```bash
 docker compose up -d --build
@@ -106,9 +106,11 @@ docker compose ps
 docker compose logs -f api
 ```
 
-API container chờ PostgreSQL và Redis healthy, sau đó entrypoint tự chạy `prisma migrate deploy` trước khi khởi động `node dist/main.js`.
+API container chờ PostgreSQL và Redis healthy; Mailpit chạy cùng Compose ở profile `demo`. Sau đó entrypoint tự chạy `prisma migrate deploy` trước khi khởi động `node dist/main.js`.
 
-Port API trên host lấy từ `API_HOST_PORT`, mặc định là `3000`. PostgreSQL và Redis chỉ được publish trên loopback của host. Dữ liệu PostgreSQL và file upload được lưu trong các named volume `pgdata` và `uploads`.
+Port API trên host lấy từ `API_HOST_PORT`, mặc định là `3000`. PostgreSQL, Redis và hai cổng Mailpit chỉ được publish trên `127.0.0.1` của host. Dữ liệu PostgreSQL và file upload được lưu trong các named volume `pgdata` và `uploads`.
+
+Mailpit chỉ dùng cho local/demo. Mở [http://localhost:8025](http://localhost:8025) để xem email thử nghiệm. Để thử đặt lại mật khẩu: tạo tài khoản hoặc dùng tài khoản seed, gọi `POST /api/v1/auth/forgot-password` với email tài khoản, mở email trong Mailpit lấy OTP, gọi `POST /api/v1/auth/reset-password` với OTP và mật khẩu mới, rồi đăng nhập lại qua `POST /api/v1/auth/login`. Dùng Swagger UI tại [http://localhost:3000/api/docs](http://localhost:3000/api/docs) để xem body cụ thể của từng request.
 
 Seed không tự chạy khi container khởi động và production image hiện không chứa seed runner. Nếu cần tài khoản/data demo, hãy cài dependency trên host rồi chạy:
 
@@ -136,6 +138,7 @@ Lệnh này không xóa named volume. Không dùng tùy chọn `--volumes` nếu
 | `PORT`                 | Không                 | `3000`                                                     | Port NestJS lắng nghe bên trong host/container.                                                                     |
 | `API_PREFIX`           | Không                 | `api/v1`                                                   | Global prefix của API nghiệp vụ.                                                                                    |
 | `TRUSTED_PROXY_IPS`    | Không                 | Trống                                                      | Danh sách IP proxy tin cậy, phân cách bằng dấu phẩy. Để trống khi không chạy sau reverse proxy.                     |
+| `COMPOSE_PROFILES`     | Không                 | `demo`                                                     | Bật service Mailpit khi chạy Compose local/demo; bỏ profile này khi triển khai production.                          |
 | `API_HOST_PORT`        | Không                 | `3000`                                                     | Port API được Docker Compose publish ra host.                                                                       |
 | `POSTGRES_HOST_PORT`   | Không                 | `5432`                                                     | Port PostgreSQL được Compose publish trên `127.0.0.1`.                                                              |
 | `REDIS_HOST_PORT`      | Không                 | `6379`                                                     | Port Redis được Compose publish trên `127.0.0.1`.                                                                   |
@@ -149,8 +152,8 @@ Lệnh này không xóa named volume. Không dùng tùy chọn `--volumes` nếu
 | `JWT_REFRESH_SECRET`   | Có                    | `change-me-too`                                            | Secret ký refresh token; phải khác access secret.                                                                   |
 | `JWT_REFRESH_EXPIRES`  | Không                 | `7d`                                                       | Thời hạn refresh token.                                                                                             |
 | `OTP_DELIVERY_PROVIDER` | Có                    | `smtp`                                                     | Provider gửi OTP; hiện chỉ hỗ trợ SMTP.                                                                             |
-| `MAIL_HOST`             | Có                    | —                                                          | Host của SMTP relay.                                                                                                |
-| `MAIL_PORT`             | Có                    | `587`                                                      | Port SMTP; thường dùng 587 với STARTTLS hoặc 465 với TLS trực tiếp.                                                 |
+| `MAIL_HOST`             | Có                    | `mailpit`                                                  | Trong Compose dùng `mailpit`; khi API chạy trên host dùng `127.0.0.1`. Production dùng host SMTP thật.              |
+| `MAIL_PORT`             | Có                    | `1025`                                                     | Port Mailpit local/demo; production dùng port do SMTP provider cung cấp.                                             |
 | `MAIL_USER`             | Theo SMTP provider    | Trống                                                      | Username SMTP. Phải cấu hình cùng `MAIL_PASSWORD` nếu relay yêu cầu authentication.                                 |
 | `MAIL_PASSWORD`         | Theo SMTP provider    | Trống                                                      | Password SMTP. Không được commit hoặc ghi ra log.                                                                   |
 | `MAIL_FROM`             | Có                    | `PFMS <no-reply@example.com>`                              | Sender đã được SMTP provider cho phép.                                                                              |
@@ -162,7 +165,7 @@ Lệnh này không xóa named volume. Không dùng tùy chọn `--volumes` nếu
 
 Luồng quên mật khẩu lưu hash OTP trong Redis với TTL 5 phút rồi gửi plaintext OTP một lần qua SMTP. Ứng dụng không ghi OTP, email nhận hoặc SMTP credential ra log. Nếu SMTP thất bại, ứng dụng best-effort xoá OTP vừa lưu nhưng vẫn trả response chung để không tiết lộ account existence.
 
-Để gửi email production, cấu hình một SMTP relay và sender/domain đã được xác minh. Automated tests thay delivery service bằng fake và không kết nối SMTP thật.
+Để gửi email production, bỏ `COMPOSE_PROFILES=demo`, thay `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASSWORD`, `MAIL_FROM` trong `.env` bằng cấu hình của SMTP provider thật (ví dụ Brevo); đặt `MAIL_SECURE` theo chế độ TLS của provider. Không dùng Mailpit hoặc địa chỉ sender demo ở production. Automated tests thay delivery service bằng fake và không kết nối SMTP thật.
 
 ## Prisma và database
 
@@ -359,7 +362,7 @@ Project hiện chưa có cấu hình image registry/pull, Kubernetes, managed da
 - Không commit `.env`, `.env.test` hoặc secret vào Git.
 - Không chạy seed demo trên production.
 - Local upload hiện nằm trong Docker named volume; chưa có object storage/S3 thực tế.
-- OTP quên mật khẩu được lưu dưới dạng hash trong Redis với TTL 5 phút, gửi qua SMTP và không được ghi plaintext ra console. Cần cấu hình SMTP relay cùng sender/domain production hợp lệ trước khi public hệ thống.
+- OTP quên mật khẩu được lưu dưới dạng hash trong Redis với TTL 5 phút, gửi qua SMTP và không được ghi plaintext ra console. Mailpit trong Compose dành cho local/demo; cần cấu hình SMTP relay cùng sender/domain production hợp lệ trước khi public hệ thống.
 - Project chưa cấu hình reverse proxy hoặc TLS/HTTPS.
 - Project chưa có CD tự động; GitHub Actions hiện chỉ thực hiện CI cho pull request vào `main`.
 - Cần tự thiết lập backup, giám sát, domain, TLS và chính sách vận hành phù hợp trước khi public hệ thống.
